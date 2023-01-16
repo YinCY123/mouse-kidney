@@ -1,0 +1,134 @@
+---
+title: "remapping glomerulus sequencing data"
+author: "YinCY"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(Rsubread)
+
+# build index
+ref_genome <- "../../Documents/Biology/reference-genome/mouse/GENCODE/GRCm39.genome.fa.gz"
+buildindex(basename = "../../Documents/Biology/reference-genome/mouse/GENCODE/GENCODE_GRCm39_reference_genome_subread_index", 
+           reference = ref_genome)
+```
+
+
+```{r}
+library(fs)
+library(magrittr)
+
+file1 <- dir_ls("../../git/data/kidney/kidney-map/glomer2021/fastq/")
+file1 %>% head
+
+qscores <- vector(mode = "list")
+for(file in file1){
+    qscores[[basename(file)]] <- qualityScores(filename = file, 
+                                               offset = 33)
+}
+
+# some reads has very low quality scores
+
+df_dim <- qscores %>% sapply(dim)
+```
+
+
+```{r}
+library(fs)
+out_file1 <- sub("fastq.gz$", "BAM", basename(file1))
+out_file1 <- paste0("../../git/data/kidney/kidney-map/glomer2021/BAM/", out_file1)
+out_file1 %>% head
+
+for(i in seq_along(file1)){
+    align(index = "../../Documents/Biology/reference-genome/mouse/GENCODE/GENCODE_GRCm39_reference_genome_subread_index", 
+          type = "rna", 
+          readfile1 = file1[[i]], 
+          input_format = "gzFASTQ", 
+          output_file = out_file1[[i]], 
+          )
+}
+```
+
+```{r}
+count_table <- featureCounts(files = out_file1, 
+                            annot.ext = "../../Documents/Biology/reference-genome/mouse/GENCODE/gencode.vM31.chr_patch_hapl_scaff.annotation.gff3.gz", 
+                            nthreads = 10, 
+                            isGTFAnnotationFile = TRUE)
+
+count_table %>% sapply(names)
+
+count_table$stat %>% head
+count_table$counts %>% .[1:10, 1:10]
+```
+
+```{r}
+# sample information
+library(GEOquery)
+library(magrittr)
+
+GSE160048 <- getGEO(GEO = "GSE160048", GSEMatrix = TRUE)
+GSE160048 %>% class()
+GSE160048 %>% length
+phonedata <- GSE160048$`GSE160048-GPL21493_series_matrix.txt.gz` %>% phenoData() %>% pData 
+GSE160048$`GSE160048-GPL21493_series_matrix.txt.gz` 
+
+phonedata <- phonedata %>% dplyr::select(title, geo_accession, organism_ch1, description, 
+                                         strain = `strain:ch1`, tissue = `tissue:ch1`)
+
+library(stringr)
+phonedata$num <- str_extract(phonedata$title, "^[0-9]+")
+phonedata$num %>% table %>% sum
+phonedata %>% dplyr::select(title, geo_accession, num) %>% dplyr::arrange(num, geo_accession)
+```
+
+```{r}
+# SRA information
+srr <- read.table("data/SraRunTable.txt", sep = ",", header = T)
+srr %>% dplyr::select(Run, BioSample, GEO_Accession..exp.) %>% dplyr::arrange(Run, BioSample)
+
+srr <- srr %>% dplyr::select(Run, Assay.Type, AvgSpotLen, BioSample, Experiment, GEO_Accession..exp., Sample.Name, Tissue, Strain)
+srr <- srr %>% dplyr::rename(assay_type = Assay.Type, 
+                             GEO_acession = GEO_Accession..exp., 
+                             sample_name = Sample.Name)
+
+sample_info <- dplyr::left_join(srr, phonedata, by = c("sample_name" = "geo_accession"))
+sample_info <- sample_info %>% dplyr::select(Run, assay_type, AvgSpotLen, BioSample, Experiment, sample_name, tissue, Strain, title, description)
+rownames(sample_info) <- sample_info$Run
+sample_info
+write.csv(sample_info, "data/mouse_glomer_sample_information.csv")
+```
+
+```{r}
+library(stringr)
+# ensembl version id: ensembl_id.version
+counts <- count_table$counts
+identical(colnames(counts), paste0(sample_info$Run, ".BAM"))
+colnames(counts) <- str_replace(colnames(counts), ".BAM$", "")
+rownames(counts) <- str_replace(rownames(counts), "\\.[:digit:]+$", "")
+
+gene_data <- DataFrame(ensembl = rownames(counts), 
+                       symbol = mapIds(EnsDb.Mmusculus.v79, 
+                                       keys = rownames(counts), 
+                                       keytype = "GENEID", 
+                                       column = "SYMBOL"), 
+                       row.names = rownames(counts))
+gene_data
+```
+
+
+```{r}
+library(SingleCellExperiment)
+
+glomer_sce <- SingleCellExperiment(assays = list(counts = counts), 
+                                   rowData = gene_data, 
+                                   colData = sample_info)
+
+glomer_sce
+saveRDS(glomer_sce, "../../git/data/kidney/kidney-map/glomer2021/glomer_sce.rds")
+```
+

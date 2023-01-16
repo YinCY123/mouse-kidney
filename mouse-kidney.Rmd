@@ -14,110 +14,831 @@ knitr::opts_chunk$set(echo = TRUE)
 1. GSE107585: whole mice kidney single cell sequencing data, 2018 science  
 2. GSE129798: whole mice kidney single cell sequencing data, with regional information, 2019 development cell  
 3. GSE160048: mice and human glomerular sequencing data  
+    candidate: GSE174102, GSE127235, GSE201932
 4. GSE175421: mice sympathetic and sensory nerve sequencing data  
 5. PRJCA003940: embryonic and monocytes derived macrophage bulk sequencing data, for reference  
 6. GSE150338: microdissected mouse tubules sequencing data, for reference  
 
 remove some very few cells from each dataset.
 
-# annotation cells
-## prepare macrophage reference data
-```{r}
-library(SingleCellExperiment)
-library(readxl)
-library(org.Mm.eg.db)
-?SingleCellExperiment
 
-macrophages <- read_xlsx("../data/kidney/kidney-map/PRJCA003940.xlsx", 
-                         sheet = 1)
-macrophages <- macrophages[, 1:7]
-ref_macrophage_sce <- SingleCellExperiment(
-    assays = list(count = macrophages[, 2:7]), 
-    rowData = data.frame(Symbol = macrophages[, 1, drop = T]), 
-    colData = data.frame(group = rep(c("monocyte derived", "embryonic derived"), each = 3))
+# prepare mouse tubula sequencing data
+```{r}
+tubule_region <- data.frame(
+    short_name = c("PTS1", "PTS2", "PTS3", "DTL1", "DTL2", "DTL3", "ATL", 
+                   "MTAL", "CTAL", "DCT", "CNT", "CCD", "OMCD", "IMCD"), 
+    log_name = c("initial segment of the proximal convoluted tubule",
+                 "proximal straight tubule in cortical medullary lays", 
+                 "last segment of the proximal straight tubule in outer stripe of outer medulla", 
+                 "short descending limb of the loop of Henle", 
+                 "long descending limb of the loop of Henle in the outer medulla", 
+                 "long descending limb of the loop of Henle in the inner medulla", 
+                 "thin ascending limb of the loop of Henle", 
+                 "medullary thick ascending limb of the loop of Henle", 
+                 "cortical thick ascending limb of the loop of Henle", 
+                 "distal convoluted tubule", 
+                 "connecting tubule", 
+                 "cortical collecting duct", 
+                 "outer medullary collecting duct", 
+                 "inner medullary collecting duct")
 )
 
-columns(org.Mm.eg.db)
-rowData(ref_macrophage_sce)$ensembl <- mapIds(org.Mm.eg.db, keys = rowData(ref_macrophage_sce)$Symbol, keytype = "SYMBOL", column = "ENSEMBL")
-rowData(ref_macrophage_sce)$entrez <- mapIds(org.Mm.eg.db, keys = rowData(ref_macrophage_sce)$Symbol, keytype = "SYMBOL", column = "ENTREZID")
-rowData(ref_macrophage_sce)
-
-colData(ref_macrophage_sce)$cell_type <- rep(c("monocytes macrophage", "embryonic macrophage"), each  =3)
-colData(ref_macrophage_sce)
-
-saveRDS(ref_macrophage_sce, "../data/kidney/kidney-map/macrophage/ref_macrophage_sce.rds")
+tubule_region
 ```
-
-
-## prepare mouse tubula sequencing data
-
-```
-PTS1, initial segment of the proximal convoluted tubule  
-PTS2, proximal straight tubule in cortical medullary rays  
-PTS3, last segment of the proximal straight tubule in outer stripe of outer medulla  
-DTL1, short descending limb of the loop of Henle  
-DTL2, long descending limb of the loop of Henle in the outer medulla  
-DTL3, long descending limb of the loop of Henle in the inner medulla  
-ATL, thin ascending limb of the loop of Henle  
-MTAL, medullary thick ascending limb of the loop of Henle  
-CTAL, cortical thick ascending limb of the loop of Henle  
-DCT, distal convoluted tubule  
-CNT, connecting tubule  
-CCD, cortical collecting duct  
-OMCD, outer medullary collecting duct  
-IMCD, inner medullary collecting duct  
-```
-
 
 ```{r}
 library(dplyr)
 library(stringr)
 
-mouse_tubule <- read.table("../../git/data/kidney/kidney-map/mouse-tubule/GSE150338_Mouse_TPM_Replicates.txt", 
-                           header = T, 
-                           sep = "\t", 
-                           na.strings = "#N/A", 
-                           comment.char = "")
+mouse_tubule <- read.csv("../../git/data/kidney/kidney-map/mouse-tubule/GSE150338_Mouse_TPM_Replicates.csv", 
+                         sep = "\t")
 mouse_tubule %>% dim
 mouse_tubule %>% tail
 mouse_tubule %>% head
 mouse_tubule %>% colnames()
 mouse_tubule$X %>% table(useNA = "ifany")
+mouse_tubule
+
 # discate glomerila 
 mouse_tubule <- mouse_tubule %>% select(!matches("_GL_|X"))
-rowdata <- mouse_tubule[, 1:3]
-coldata <- data.frame(sample = colnames(mouse_tubule[, -c(1:3)]), 
-                      region = gsub("m[0-9]{0,}_|_[a-z]{0,}", replacement = "", colnames(mouse_tubule[, -c(1:3)])))
+rownames(mouse_tubule) <- mouse_tubule$gene_id
+rowdata <- mouse_tubule[, 1:2]
+coldata <- data.frame(sample = colnames(mouse_tubule[, -c(1:2)]), 
+                      region = gsub("m[0-9]{0,}_|_[a-z]{0,}", replacement = "", colnames(mouse_tubule[, -c(1:2)])), 
+                      row.names = colnames(mouse_tubule[, -c(1:2)]))
 
-ref_mouse_tubule_sce <- SingleCellExperiment(assays = list(tpm = mouse_tubule[, -c(1:3)]), 
+ref_mouse_tubule_sce <- SingleCellExperiment(assays = list(tpm = mouse_tubule[, -c(1:2)]), 
                                              rowData = rowdata, 
                                              colData = coldata)
+rowData(ref_mouse_tubule_sce)
 
 saveRDS(ref_mouse_tubule_sce, 
         file = "../../git/data/kidney/kidney-map/mouse-tubule/ref_mouse_tubule_sce.rds")
 ```
 
 
-## prepare dev cell data
+# prepare dev cell data
 ```{r}
 library(DropletUtils)
 library(scran)
 library(scater)
+library(magrittr)
+library(EnsDb.Mmusculus.v79)
 
-dev_cell_sce <- read10xCounts("../data/kidney/kidney-map/dev-cell/Mouse_Adult_DGE/")
-dev_cell_sce
-colData(dev_cell_sce) %>% as.data.frame()
+dev_cell_sce <- read10xCounts("../data/kidney/kidney-map/dev-cell/Mouse_Adult_DGE_final/")
+dev_cell_sce %>% colData()
+dev_cell_sce %>% rowData() %>% .$ID %>% duplicated() %>% table
+
+# use the newest annotation data
+library(AnnotationHub)
+an <- AnnotationHub()
+ensdb <- query(ah, c("EnsDb", "Mus Musculus"))
+ens107 <- ensdb[["AH104895"]]
+ens107 %>% columns
+
+rowData(dev_cell_sce)$ensembl <- mapIds(ens107, 
+                                        keys = rowData(dev_cell_sce)$ID, 
+                                        keytype = "SYMBOL", 
+                                        column = "GENEID")
+rowData(dev_cell_sce)$ensembl %>% duplicated() %>% table
+rownames(dev_cell_sce) <- uniquifyFeatureNames(ID = rowData(dev_cell_sce)$ID, 
+                                                names = rowData(dev_cell_sce)$ensembl)
+rowData(dev_cell_sce)
+
+colData(dev_cell_sce)$region <- substr(colData(dev_cell_sce)$Barcode, 1, 2)
+colData(dev_cell_sce)$batch <- substr(colData(dev_cell_sce)$Barcode, 1, 4)
+colData(dev_cell_sce)$gender <- substr(colData(dev_cell_sce)$Barcode, 4, 4)
+colData(dev_cell_sce)
+
+table(colData(dev_cell_sce)$gender);table(colData(dev_cell_sce)$batch);table(colData(dev_cell_sce)$region)
 ```
 
 ```{r}
-final_frac <- readRDS("../Bio-packages/kidneycellexplorer/data/expr_data.rds")
+# quality control
+is_mito <- grepl("^mt-", rowData(dev_cell_sce)$ID, ignore.case = F)
+is_mito %>% table
+rowData(dev_cell_sce)$ID[is_mito] %>% sort
+
+qclusters <- quickCluster(dev_cell_sce, 
+                         min.size = 500, 
+                         method = "igraph", 
+                         use.ranks = T)
+qclusters %>% table
+colData(dev_cell_sce)$quick_cluster <- qclusters
+
+library(tibble)
+colData(dev_cell_sce) %>% 
+    as_tibble() %>% 
+    ggplot(aes(region, quick_cluster)) +
+    geom_jitter(size = 0.1)
+
+qc <- perCellQCMetrics(x = dev_cell_sce, subsets = list(mito = is_mito))
+colData(dev_cell_sce)$subsets_mito_percent <- qc$subsets_mito_percent
+
+saveRDS(dev_cell_sce, 
+        "../data/kidney/kidney-map/dev-cell/dev_cell_sce.rds")
+```
+
+```{r}
+# normalization
+dec_sf_dev_cell <- calculateSumFactors(dev_cell_sce, clusters = colData(dev_cell_sce)$quick_cluster)
+sizeFactors(dev_cell_sce) <- dec_sf_dev_cell
+colData(dev_cell_sce)
+dev_cell_sce <- logNormCounts(dev_cell_sce)
+dev_cell_sce
+saveRDS(dev_cell_sce, "../data/kidney/kidney-map/dev-cell/dev_cell_sce_0114.rds")
+```
+
+```{r}
+# feature selection
+library(magrittr)
+library(stringr)
+library(scuttle)
+library(scran)
+library(scater)
+library(BiocParallel)
+
+colData(dev_cell_sce)
+dec_dev_cell <- modelGeneVar(dev_cell_sce)
+dec_dev_cell[order(dec_dev_cell$bio, decreasing = T), ]
+
+dec_pos_dev_cell <- modelGeneVarByPoisson(dev_cell_sce, size.factors = dev_cell_sce$sizeFactor)
+dec_pos_dev_cell[order(dec_pos_dev_cell$bio, decreasing = T), ]
+
+dec_cv2_dev_cell <- modelGeneCV2(x = dev_cell_sce, 
+                                 size.factor = dev_cell_sce$sizeFactor)
+dec_cv2_dev_cell[order(dec_cv2_dev_cell$FDR, decreasing = F), ]
+```
+
+```{r}
+par(mfrow = c(2, 3))
+for(i in 1:ncol(dec_dev_cell$per.block)){
+    plot(metadata(dec_dev_cell$per.block[[i]])$mean, 
+         metadata(dec_dev_cell$per.block[[i]])$var, 
+         pch = 19, cex = 0.5, 
+         main = paste0("model_", names(dec_dev_cell$per.block)[[i]]))
+    curve(metadata(dec_dev_cell$per.block[[i]])$trend(x), col = "red", lwd = 2, add = TRUE)
+}
+```
+
+
+```{r}
+par(mfrow = c(2, 3))
+for(i in 1:ncol(dec_pos_dev_cell$per.block)){
+    plot(metadata(dec_pos_dev_cell$per.block[[i]])$mean, 
+         metadata(dec_pos_dev_cell$per.block[[i]])$var, 
+         pch = 19, cex = 0.5, 
+         main = paste0("Pois_", names(dec_pos_dev_cell$per.block)[[i]]))
+    curve(metadata(dec_pos_dev_cell$per.block[[i]])$trend(x), col = "red", lwd = 2, add = TRUE)
+}
+```
+
+```{r}
+par(mfrow = c(2, 3))
+for(i in 1:ncol(dec_cv2_dev_cell$per.block)){
+    plot(metadata(dec_cv2_dev_cell$per.block[[i]])$mean, 
+         metadata(dec_cv2_dev_cell$per.block[[i]])$var, 
+         pch = 19, lwd = 2, 
+         main = paste0("CV2_", names(dec_cv2_dev_cell$per.block)[[i]]))
+    curve(metadata(dec_cv2_dev_cell$per.block[[i]])$trend(x), col = "red", lwd = 2, add = TRUE)
+}
 ```
 
 
 
+```{r}
+dev_cell_hvgs <- getTopHVGs(stats = dec_cv2_dev_cell, 
+                            var.field = "ratio",
+                            var.threshold = 1.5)
+dev_cell_hvgs %>% str
+
+# choosing the number of PCs
+dev_cell_sce <- runPCA(dev_cell_sce, subset_row = dev_cell_hvgs, ncomponents = 50)
+percentvar <- reducedDim(dev_cell_sce, "PCA") %>% attr(which = "percentVar")
+
+library(PCAtools)
+elbow <- findElbowPoint(percentvar)
+
+df <- data.frame(PCs = 1:dim(reducedDim(dev_cell_sce, "PCA"))[2], 
+                 percentvar = percentvar)
+
+df %>% 
+    ggplot(aes(PCs, percentvar)) + 
+    geom_line() + 
+    geom_point() +
+    geom_vline(xintercept = elbow) +
+    scale_y_continuous(trans = "log2")
+
+npcs <- denoisePCA(dev_cell_sce, technical = dec_pos_dev_cell, subset.row = dev_cell_hvgs) %>% 
+    reducedDim(type = "PCA") %>% ncol
+
+pcs <- reducedDim(dev_cell_sce, "PCA")
+library(bluster)
+choise <- getClusteredPCs(pcs = as.matrix(pcs), 
+                          BLUSPARAM = SNNGraphParam(type = "jaccard", k = 10, BPPARAM = MulticoreParam(workers = 12)))
+choise %>% metadata()
+
+dev_cell_sce <- runPCA(x = dev_cell_sce, 
+                       subset_row = dev_cell_hvgs, 
+                       ncomponents = 8, 
+                       BPPARAM = MulticoreParam(workers = 12))
+
+# determine perplexity
+per <- seq(10, 80, 10) %>% as.character()
+sces <- vector(mode = "list")
+for(i in per){
+    sces[[i]] <- runTSNE(dev_cell_sce, 
+                         dimred = "PCA", 
+                         perplexity = as.integer(i), 
+                         BPPARAM = MulticoreParam(workers = 12))
+}
+
+p <- lapply(sces, FUN = plotTSNE, 
+            colour_by = "quick_cluster", 
+            text_by = "quick_cluster")
+
+
+# using the preplexity of 10
+set.seed(110)
+dev_cell_sce <- runTSNE(x = dev_cell_sce, 
+                        dimred = "PCA", 
+                        perplexity = 10, 
+                        BPPARAM = MulticoreParam(workers = 12))
+plotTSNE(dev_cell_sce, 
+         colour_by = "gender", 
+         point_size = 0.2, 
+         text_by = "quick_cluster")
+saveRDS(dev_cell_sce, "../data/kidney/kidney-map/dev-cell/dev_cell_sce.rds")
+```
+
+
+```{r}
+# dev_cell_sce <- readRDS("../data/kidney/kidney-map/dev-cell/dev_cell_sce.rds")
+# graph based clustering
+library(scran)
+library(igraph)
+library(scater)
+library(BiocParallel)
+
+grep("^cluster_", ls("package:igraph"), value = T)
+
+graph <- buildSNNGraph(dev_cell_sce, k = 10, use.dimred = "PCA")
+clusters <- cluster_louvain(g)$membership
+clusters %>% table
+
+colLabels(dev_cell_sce) <- factor(clusters)
+colData(dev_cell_sce)
+```
+
+```{r}
+# highlight each cluster and sub-cluster
+for( n in levels(colLabels(dev_cell_sce))){
+    my_color <- rep("grey", length(colLabels(dev_cell_sce)))
+    names(my_color) <- as.character(colLabels(dev_cell_sce))
+    my_color[colLabels(dev_cell_sce) == n] <- "red"
+    
+    plotReducedDim(object = dev_cell_sce, 
+                   dimred = "TSNE", 
+                   colour_by = "label", 
+                   text_by = "label", 
+                   point_size = 0.2) +
+        scale_color_manual(values = my_color) +
+        guides(colour = guide_legend(override.aes = list(size = 2)))
+    
+    ggsave(paste0("dev_image/the-", n, "th-cluster.pdf"))
+}
+```
+
+```{r}
+# marker gene detecttion
+dev_cell_sce %>% colData() %>% .$label %>% table
+library(stringr)
+
+base_label <- str_replace(string = as.character(colLabels(dev_cell_sce)), 
+                          pattern = "\\.[0-9]$", 
+                          replacement = "")
+base_label %>% table
+colData(dev_cell_sce)$base_label <- factor(base_label)
+colData(dev_cell_sce)
+
+markers <- scoreMarkers(x = dev_cell_sce, 
+                        groups = colData(dev_cell_sce)$base_label)
+markers[["23"]][order(markers[["23"]]$min.logFC.cohen, decreasing = T), ] %>% 
+    head(30) %>% 
+    as.data.frame() %>% 
+    rownames() %>% 
+    idconv(from_type = "GENEID", to_type = "SYMBOL")
+
+fmarkers <- findMarkers(dev_cell_sce, 
+                        groups = colData(dev_cell_sce)$base_label, 
+                        test.type = "wilcox", 
+                        pval.type = "all")
+fmarkers %>% names
+fmarkers[["23"]] %>% 
+    as.data.frame() %>% 
+    dplyr::arrange(FDR) %>% 
+    head(30) %>% 
+    rownames() %>% 
+    idconv(from_type = "GENEID", to_id = "SYMBOL")
+```
+
+
+```{r}
+# sub-cluster
+# 5
+library(bluster)
+colLabels(dev_cell_sce) %>% table
+c5 <- dev_cell_sce[, colLabels(dev_cell_sce) == 5]
+g5 <- buildSNNGraph(c5, k = 300, use.dimred = "TSNE")
+clust5 <- cluster_walktrap(g5)$membership
+clust5 %>% table
+colLabels(c5) <- factor(clust5)
+
+label <- colLabels(dev_cell_sce)
+label <- as.character(label)
+label[label == 5] <- paste0("5.", clust5)
+label %>% table
+table(factor(label))
+colLabels(dev_cell_sce) <- factor(label)
+plotReducedDim(c5, 
+               dimred = "TSNE",
+               colour_by = idconv("Stmn1"), 
+               text_by = "label")
+```
+
+```{r}
+# 6
+c6 <- dev_cell_sce[, colLabels(dev_cell_sce) == 6]
+g6 <- buildSNNGraph(c6, k = 200, use.dimred = "TSNE")
+clust6 <- cluster_walktrap(g6)$membership
+clust6 %>% table
+colLabels(c6) <- factor(clust6)
+plotTSNE(c6, colour_by = "label", 
+         text_by = "label")
+label <- colLabels(dev_cell_sce)
+label <- as.character(label)
+label[label == 6] <- paste0("6.", clust6)
+label %>% table
+colLabels(dev_cell_sce) <- factor(label)
+
+plotReducedDim(c6, 
+               dimred = "TSNE",
+               colour_by = idconv("Umod"), 
+               text_by = "label")
+```
+
+
+```{r}
+# 4
+c4 <- dev_cell_sce[, colLabels(dev_cell_sce) == 4]
+g4 <- buildSNNGraph(c4, k = 200, use.dimred = "TSNE")
+clust4 <- cluster_walktrap(g4)$membership
+clust4 %>% table
+colLabels(c4) <- factor(clust4)
+
+label <- colLabels(dev_cell_sce)
+label <- as.character(label)
+label[label == "4"] <- paste0("4.", clust4)
+colLabels(dev_cell_sce) <- factor(label)
+
+library(patchwork)
+plotTSNE(c4, colour_by = idconv("Hnf4a"), 
+         text_by = "label") +
+plotTSNE(c4, colour_by = "label", 
+         text_by = "label")
+
+saveRDS(dev_cell_sce, "../../git/data/kidney/kidney-map/dev-cell/dev_cell_sce.rds")
+# dev_cell_sce <- readRDS("../../git/data/kidney/kidney-map/dev-cell/dev_cell_sce.rds")
+```
+
+
+```{r}
+# cell type annotation base on marker genes
+markers <- list(
+    endothelia = c("Cdh5", "Kdr", "Nrp1"), 
+    macrophage = c("C1qa", "C1qb", "C1qc", "Cx3cr1", "Lyz2"), 
+    T_cell = c("Thy1"), 
+    B_cell = c("Cd79a", "Cd79b"),
+    NK = c("Tyrobp"), 
+    VSMC = c("Cnn1"), 
+    pericyte = c("Cspg4"), 
+    Fibroblast = c("Dcn"), 
+    Proximal_tubule = c("Spp2", "Lrp2", "Slc27a2"), 
+    PTS1 = c("Slc5a2", "Slc5a12", "Slc7a7", "Spp2", "Slc6a19", "Slc22a29"),
+    PTS2 = c(), 
+    PTS3 = c(),
+    CD_Intercalated_cell = c("Atp6v1g3", "Slc4a1", "Aqp6", "Slc26a4", "Hmx2"),
+    CD_Principal_cell = c("Hsd11b2", "Aqp4", "Aqp2"),
+    Distal_tubule = c("Slc12a1", "Slc12a3", "Calb1"),
+    Thin_limb_of_loop_of_henle = c("Aqp1", "Sptssb"),
+    DCT = c("Pvalb", "Slc12a3"),
+    PT = c("Slc5a2", "Slc22a6"), 
+    LOH = c("Clcnka", "Slc12a1", "Umod")
+)
+
+cell_annotation <- c(
+    "1" = "T cell",
+    "2" = "Endothelia", 
+    "3" = "Principal cell",
+    "4.1" = "PTS3",
+    "4.2" = "PTS1", 
+    "4.3" = "PTS1", 
+    "4.4" = "PTS2",
+    "5.1" = "CD_PC",
+    "5.2" = "CD_PC",
+    "5.3" = "CD_IC1",
+    "5.4" = "CD_PC", 
+    "5.5" = "CD_PC",
+    "6.1" = "LOH", 
+    "6.2" = "CD_IC2",
+    "6.3" = "LOH", 
+    "6.4" = "LOH", 
+    "6.5" = "LOH",
+    "7" = "LOH",
+    "8" = "Macrophage",
+    "9" = "PTS1",
+    "10" = "Endothelia", 
+    "11" = "NK", 
+    "12" = "Endothelia", 
+    "13" = "Endothelia", 
+    "14" = "Endothelia",
+    "15" = "Pericyte/VSMC", 
+    "16" = "Macrophage", 
+    "17" = "CD_PC",
+    "18" = "B cell",
+    "19" = "DC",
+    "20" = "double",
+    "21" = "PTS1",
+    "22" = "CD_PC",
+    "23" = "",
+    "24" = "double",
+    "25" = "Renal corpusle",
+    "26" = "DCT",
+    "27" = "Macrophage", 
+    "28" = "NK"
+)
+```
+
+```{r}
+library(SingleR)
+sce.park <- readRDS("../data/kidney/kidney-map/18science/park_kidney_sce.rds")
+
+unidentified_cells <- c(7, 19, 20, 21, 23, 24, 25)
+# Fib, CD-PC, PT, CD-PC, PT, Podo, CD-PC
+unidentifided_sce <- dev_cell_sce[, colData(dev_cell_sce)$base_label %in% unidentified_cells]
+
+pre_label <- SingleR(test = unidentifided_sce, 
+                     ref = sce.park, 
+                     labels = sce.park$cell_type, 
+                     de.method = "wilcox")
+unidentifided_sce$cell_type <- pre_label$labels
+plotTSNE(unidentifided_sce, 
+         colour_by = "cell_type", 
+         text_by = "base_label", 
+         point_size = 0.5) +
+    scale_color_brewer(type = "qual", palette = 3) +
+    guides(colour = guide_legend(override.aes = list(size = 3)))
+
+table(unidentifided_sce$cell_type, as.character(unidentifided_sce$base_label)) %>% prop.table(margin = 2)
+```
+
+
+```{r}
+source("R/helper-funs.R")
+
+p1 <- plotTSNE(dev_cell_sce, 
+         colour_by = idconv("Nr2e3"), 
+         point_size = 0.2, 
+         text_by = "label")
+p1
+```
+
+
+```{r}
+# remove unuseful cells
+
+colData(dev_cell_sce)$cell_type <- cell_annotation[as.character(colData(dev_cell_sce)$label)] 
+dev_cell_sce <- dev_cell_sce[, !(dev_cell_sce$cell_type %in% clusters_to_remove)]
+
+saveRDS(dev_cell_sce, "../data/kidney/kidney-map/dev-cell/dev_cell_sce.rds")
+dev_cell_sce <- readRDS("../data/kidney/kidney-map/dev-cell/dev_cell_sce.rds")
+```
+
+
+```{r}
+# with Seurat
+library(Seurat)
+kidney <- Read10X(data.dir = "../data/kidney/kidney-map/dev-cell/Mouse_Adult_DGE_final/", 
+                  gene.column = 1)
+kidney_sce <- CreateSeuratObject(counts = kidney, 
+                                 project = "dev_cell_kidney")
+kidney_sce[["percent.mt"]] <- PercentageFeatureSet(kidney_sce, pattern = "^mt-")
+kidney_sce <- NormalizeData(kidney_sce) %>% 
+    FindVariableFeatures(nfeatures = 2464) %>% 
+    ScaleData(vars.to.regress = "percent.mt") %>% 
+    RunPCA() %>% 
+    FindNeighbors(reduction = "pca", dims = 1:30, features = VariableFeatures(kidney_sce)) %>% 
+    FindClusters(resolution = 1) %>% 
+    RunTSNE(dims = 1:30)
+
+DimPlot(kidney_sce, reduction = "tsne")
+```
+
+
+## annotate renal tubule
+```{r}
+library(SingleR)
+
+ref_mouse_tubule_sce <- readRDS("../data/kidney/kidney-map/mouse-tubule/ref_mouse_tubule_sce.rds")
+colData(ref_mouse_tubule_sce)
+
+
+cell_to_annotate <- c("Distal tubule", "CD - Principal cells", "CD - Intercalated cells", "Proximal tubule", "tl-LOH")
+subs_dev_cell_tubule <- dev_cell_sce[, dev_cell_sce$cell_type %in% cell_to_annotate]
+
+tubule_pred <- SingleR(test = subs_dev_cell_tubule, 
+                       ref = ref_mouse_tubule_sce, 
+                       labels = ref_mouse_tubule_sce$region, 
+                       assay.type.test = "logcounts", 
+                       assay.type.ref = "tpm", 
+                       de.method = "t", 
+                       de.n = 15)
+
+ref_mouse_tubule_sce %>% colData()
+tubule_pred$labels %>% table
+```
+
+
+```{r}
+# quality check
+tubule_pred$scores %>% 
+    pheatmap::pheatmap(angle_col = 315, 
+                       cluster_cols = T, 
+                       color = viridis::viridis(n = 1000, option = "D"))
+
+plotDeltaDistribution(tubule_pred, 
+                      show = "delta.med")
+
+marker_low_assignments <- pruneScores(results = tubule_pred, 
+                                      nmads = 3) %>% table
+tubule_pred$pruned.labels %>% table
+```
+
+
+```{r}
+colData(subs_dev_cell_tubule)$location <- tubule_pred$labels
+colData(subs_dev_cell_tubule)$quality <- ifelse(pruneScores(tubule_pred) == FALSE, "high", "low")
+colData(subs_dev_cell_tubule)
+
+table(colData(subs_dev_cell_tubule[, subs_dev_cell_tubule$quality == "high"])$region, 
+      colData(subs_dev_cell_tubule[, subs_dev_cell_tubule$quality == "high"])$location) %>% 
+    prop.table(margin = 2) %>% round(digits = 2)
+```
+
+```{r}
+# remove low quality assignment
+subs_dev_cell_tubule <- subs_dev_cell_tubule[, subs_dev_cell_tubule$quality == "high"]
+colData(subs_dev_cell_tubule)
+
+# remove quality column
+colData(subs_dev_cell_tubule)$quality <- NULL
+
+plotTSNE(subs_dev_cell_tubule, colour_by = "location", 
+         point_size = 0.5, 
+         text_by = "cell_type", 
+         text_size = 3)
+```
+
+
+```{r}
+dev_cell_sce %>% colData()
+others <- dev_cell_sce[, !(dev_cell_sce$cell_type %in% cell_to_annotate)]
+colData(others)$location <- NA
+colData(others)$location <- as.character(colData(others)$location)
+
+colData(others);colData(subs_dev_cell_tubule)
+dev_cell_sce <- cbind(others, subs_dev_cell_tubule)
+
+saveRDS(dev_cell_sce, "../data/kidney/kidney-map/dev-cell/dev_cell_sce.rds")
+```
+
+
+# prepare glomerular cells
+```{r}
+# GSE146912, from 3 control sample
+
+library(magrittr)
+library(dplyr)
+library(data.table)
+library(SingleCellExperiment)
+
+control1 <- fread("../data/kidney/kidney-map/GSE146912/GSM4409507_control_1.txt.gz", 
+                 sep = "\t", 
+                 header = T) %>% 
+    as.data.frame()
+control1_cell <- colnames(control1)[-c(1, 2)]
+control1_cell %>% str
+rownames(control1) <- control1$IGIS
+
+control2 <- fread("../data/kidney/kidney-map/GSE146912/GSM4409508_control_2.txt.gz", 
+                 sep = "\t", 
+                 header = T) %>% 
+    as.data.frame()
+control2_cell <- colnames(control2)[-c(1, 2)]
+control2_cell %>% str
+rownames(control2) <- control2$IGIS
+
+control3 <- fread("../data/kidney/kidney-map/GSE146912/GSM4409509_control_3.txt.gz", 
+                  sep = "\t", 
+                  header = T) %>% 
+    as.data.frame()
+control3_cell <- colnames(control3)[-c(1, 2)]
+control3_cell %>% str
+rownames(control3) <- control3$IGIS
+
+dim(control1);dim(control2);dim(control3)
+all(identical(control1$IGIS, control2$IGIS), 
+    identical(control1$IGIS, control3$IGIS), 
+    identical(control2$IGIS, control3$IGIS))
+
+counts <- cbind(control1[, -c(1, 2)], 
+                control2[, -c(1, 2)], 
+                control3[, -c(1, 2)])
+
+gene_df <- control1[, 1:2]
+rownames(gene_df) <- gene_df$IGIS
+gene_df
+
+counts[1:10, 1:5]
+cell_df <- data.frame(cells = colnames(counts))
+rownames(cell_df) <- cell_df$cells
+
+cell_df$sample <- ifelse(cell_df$cells %in% control1_cell, "sample_1", 
+                         ifelse(cell_df$cells %in% control2_cell, "sample_2", 
+                                ifelse(cell_df$cells %in% control3_cell, "sample_3", "NA")))
+
+cell_df$sample %>% table(useNA = "ifany")
+
+glomer_sce <- SingleCellExperiment(assays = list(counts = as(as.matrix(counts), "CsparseMatrix")), 
+                                   rowData = gene_df, 
+                                   colData = cell_df)
+glomer_sce
+saveRDS(glomer_sce, "../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
+```
+
+```{r}
+glomer_sce <- readRDS("../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
+
+# quality control
+library(EnsDb.Mmusculus.v79)
+library(scran)
+
+is_mito <- grepl("^mt-", rowData(glomer_sce)$SYMBOL, ignore.case = F)
+is_mito %>% table(useNA = "ifany")
+
+qclusters <- quickCluster(glomer_sce, 
+                          min.size = 1000, 
+                          method = "igraph", 
+                          use.ranks = T, 
+                          BPPARAM = MulticoreParam(workers = 12))
+qclusters %>% table
+colData(glomer_sce)$qclusters <- qclusters
+
+glomer_sce <- addPerCellQC(glomer_sce, 
+                           subsets = list(mito = is_mito))
+glomer_sce %>% colData()
+is_outlier_mito <- isOutlier(colData(glomer_sce)$subsets_mito_percent, 
+                             type = "both", 
+                             log = TRUE, 
+                             batch = colData(glomer_sce)$sample)
+is_outlier_mito %>% table
+
+is_outlier_detected <- isOutlier(colData(glomer_sce)$detected, 
+                                 type = "lower", 
+                                 log = TRUE, 
+                                 batch = colData(glomer_sce)$sample)
+is_outlier_detected %>% table
 
 
 
+
+# normalization
+library(BiocParallel)
+
+glomer_sce <- computeSumFactors(glomer_sce, clusters = qclusters)
+sizeFactors(glomer_sce) %>% str
+
+glomer_sce <- logNormCounts(glomer_sce, 
+                            size.factors = sizeFactors(glomer_sce), 
+                            transform = "log", 
+                            assay.type = "counts")
+
+glomer_sce %>% colData()
+
+# feature selection
+
+
+# dimensionality reduction
+
+
+# clustering
+```
+
+
+# prepare nuron cells
+```{r}
+library(fs)
+library(data.table)
+library(magrittr)
+library(dplyr)
+
+glomer_unbiased <- read.table("../data/kidney/kidney-map/glomer2021/GSE160048_mouse_glom_single_cell_unbiased_rpkms.txt")
+glomer_unbiased %>% dim
+glomer_unbiased %>% head
+
+SCG_files <- dir_ls("../data/kidney/kidney-map/sym-sen2022/", regexp = "_SCG_")
+DRG_files <- dir_ls("../data/kidney/kidney-map/sym-sen2022/", regexp = "_DRG_")
+
+cell_info <- read.csv("../data/kidney/kidney-map/sym-sen2022/GSE175421_cell-barcode-ids.csv")
+
+library(EnsDb.Mmusculus.v79)
+cell_info %>% head
+
+scg3_cell_info <- cell_info %>% dplyr::filter(library.id == "SCG_3")
+scg3_cell_info <- scg3_cell_info %>% 
+    dplyr::rename("barcode" = X) %>% 
+    mutate(barcode = sub("_[0-9]_[0-9]$", "", barcode))
+
+drg3_cell_info <- cell_info %>% dplyr::filter(library.id == "DRG_3")
+drg3_cell_info <- drg3_cell_info %>% 
+    dplyr::rename("barcode" = X) %>% 
+    mutate(barcode = sub("_[0-9]_[0-9]$", "", barcode))
+
+
+scg3 <- fread(SCG_files[[3]], header = T) %>% as.data.frame()
+scg3[1:10, 1:10]
+sel_index <- (colnames(scg3[, -1]) %in% scg3_cell_info$barcode)
+sel_index %>% head
+scg_counts <- scg3[, -1] %>% .[, sel_index]
+scg_counts$symbol <- scg3$GENE
+scg_counts <- scg_counts %>% relocate(symbol)
+scg_counts[1:10, 1:10]
+scg_counts <- aggregate(scg_counts[, -1], by = list(symbol = scg_counts$symbol), FUN = sum)
+
+rowdata_scg3 <- data.frame(symbol = scg_counts$symbol)
+rowdata_scg3$ensembl <- mapIds(EnsDb.Mmusculus.v79, 
+                               keys = rowdata_scg3$symbol, 
+                               keytype = "SYMBOL", 
+                               column = "GENEID")
+rowdata_scg3 %>% head
+scg_counts <- left_join(rowdata_scg3, scg_counts)
+scg_counts <- scg_counts %>% dplyr::filter(!is.na(ensembl))
+scg_counts$ensembl %>% duplicated() %>% table
+rownames(scg_counts) <- scg_counts$ensembl
+scg_counts <- scg_counts[, -(1:2)]
+
+scg_sce <- SingleCellExperiment(assays = list(counts = as(as.matrix(scg_counts), "CsparseMatrix")), 
+                                rowData = DataFrame(ensembl = rownames(scg_counts)), 
+                                colData = scg3_cell_info %>% dplyr::filter(barcode %in% colnames(scg_counts)))
+
+# filtering out nu-nuron cells
+scg_sce %>% colData %>% .$main_cluster %>% table
+cells_to_remove <- c("Fibroblasts", "Macrophages", "T Cells", "Vascular Endothelial Cells", "Sensory Neurons")
+scg_sce <- scg_sce[, !(scg_sce$main_cluster %in% cells_to_remove)]
+saveRDS(scg_sce, "../data/kidney/kidney-map/sym-sen2022/scg_sce.rds")
+
+
+drg3 <- fread(DRG_files[[3]], header = T) %>% as.data.frame()
+drg3[1:10, 1:10]
+sel_index <- (colnames(drg3[, -1]) %in% drg3_cell_info$barcode)
+drg_counts <- drg3[, -1] %>% .[, sel_index]
+drg_counts$symbol <- drg3$GENE
+drg_counts <- drg_counts %>% relocate(symbol)
+drg_counts[1:10, 1:10]
+drg_counts <- aggregate(drg_counts[, -1], by = list(symbol = drg_counts$symbol), FUN = sum)
+
+rowdata_drg3 <- data.frame(symbol = drg_counts$symbol)
+rowdata_drg3$ensembl <- mapIds(EnsDb.Mmusculus.v79, 
+                               keys = rowdata_drg3$symbol, 
+                               keytype = "SYMBOL", 
+                               column = "GENEID")
+drg_counts <- left_join(rowdata_drg3, drg_counts)
+drg_counts <- drg_counts %>% dplyr::filter(!is.na(ensembl))
+drg_counts$ensembl %>% duplicated() %>% table
+rownames(drg_counts) <- drg_counts$ensembl
+drg_counts <- drg_counts[, -(1:2)] 
+
+drg_sce <- SingleCellExperiment(assays = list(counts = as(as.matrix(drg_counts), "CsparseMatrix")), 
+                                rowData = DataFrame(ensembl = rownames(drg_counts)), 
+                                colData = drg3_cell_info %>% dplyr::filter(barcode %in% colnames(drg_counts)))
+
+# remove un-nuron cells
+cells_to_remove <- c("Fibroblasts", "Macrophages", "Sympathetic Neurons", "T Cells", "Vascular Endothelial Cells")
+drg_sce$main_cluster %>% table
+
+drg_sce <- drg_sce[, !c(drg_sce$main_cluster %in% cells_to_remove)]
+saveRDS(drg_sce, "../data/kidney/kidney-map/sym-sen2022/drg_sce.rds")
+```
 
 
 
