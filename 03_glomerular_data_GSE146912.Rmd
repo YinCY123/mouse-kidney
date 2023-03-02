@@ -1,0 +1,207 @@
+---
+title: "03_glomerular_data_GSE146912"
+author: "YinCY"
+date: "2023-03-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# prepare glomerular cells
+data from GSE146912
+```{r}
+
+
+library(magrittr)
+library(dplyr)
+library(data.table)
+library(tibble)
+library(SingleCellExperiment)
+
+# normal
+normal <- fread("../data/kidney/kidney-map/GSE146912/Normal_1.txt.gz", 
+                sep = "\t", 
+                header = TRUE)
+gene_df <- normal[, 1:2]
+gene_df <- gene_df %>% dplyr::rename(ensembl = IGIS) 
+rownames(gene_df) <- gene_df$ensembl
+cell_df <- data.frame(cell = colnames(normal)[-c(1,2)])
+rownames(cell_df) <- cell_df$cell
+normal %>% dim
+normal[1:10, 1:5]
+normal <- normal %>% column_to_rownames("IGIS") %>% select(-SYMBOL)
+
+glomer_sce <- SingleCellExperiment(assays = list(counts = as(as.matrix(normal), "CsparseMatrix")), 
+                                   rowData = gene_df, 
+                                   colData = cell_df)
+glomer_sce
+saveRDS(glomer_sce, "../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
+```
+
+```{r}
+glomer_sce <- readRDS("../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
+
+# quality control
+library(scran)
+library(BiocParallel)
+library(magrittr)
+library(scDblFinder)
+library(scater)
+library(bluster)
+
+is_mito <- grepl("^mt-", rowData(glomer_sce)$SYMBOL, ignore.case = F)
+is_mito %>% table(useNA = "ifany")
+rowData(glomer_sce)$SYMBOL[is_mito] %>% sort
+colData(glomer_sce)$percent_mito <- round((colSums(assay(glomer_sce[is_mito, ], 1)) / colSums(assay(glomer_sce, 1))) * 100, digits = 3)
+colData(glomer_sce)
+
+qclusters <- quickCluster(glomer_sce, 
+                          min.size = 100, 
+                          method = "igraph", 
+                          use.ranks = T, 
+                          BPPARAM = MulticoreParam(workers = 12))
+qclusters %>% table
+colData(glomer_sce)$qclusters <- qclusters
+
+qc <- perCellQCMetrics(glomer_sce, subsets = list(mito = is_mito))
+qc$subsets_mito_percent %>% quantile(probs = seq(0, 1, 0.05))
+
+qc_stat <- perCellQCFilters(x = qc, 
+                            sub.fields = "subsets_mito_percent")
+qc_stat %>% as.data.frame() %>% colSums()
+glomer_sce <- glomer_sce[, !(qc_stat$low_n_features | qc_stat$low_lib_size | qc$subsets_mito_percent > 5)]
+```
+
+```{r}
+# doublet detection
+dbs <- scDblFinder(glomer_sce)
+dbs$scDblFinder.class %>% table
+glomer_sce <- glomer_sce[, dbs$scDblFinder.class == "singlet"]
+glomer_sce
+```
+
+
+```{r}
+# normalization
+libsize <- calculateSumFactors(assay(glomer_sce, 1), clusters = glomer_sce$qclusters)
+libsize %>% range
+sizeFactors(glomer_sce) <- libsize
+
+glomer_sce <- logNormCounts(glomer_sce)
+glomer_sce
+```
+
+
+```{r}
+# model gene variance
+glomer_variance2 <- modelGeneVar(glomer_sce)
+glomer_variance2[order(glomer_variance2$bio, decreasing = T), ]
+
+# feature selection
+hvgs <- getTopHVGs(glomer_variance2, fdr.threshold = 0.01)
+hvgs %>% str
+```
+
+
+```{r}
+# dimensionality reduction
+pcs <- calculatePCA(assay(glomer_sce, 2), 
+                    subset_row = hvgs)
+percentvar <- attr(pcs, "percentVar")
+library(PCAtools)
+elbow <- findElbowPoint(percentvar)
+
+df <- data.frame(pc = 1:length(percentvar), 
+                 percentvar = percentvar)
+
+df %>% 
+    ggplot(aes(pc, percentvar)) +
+    geom_line() +
+    geom_point() +
+    geom_vline(xintercept = elbow, linetype = 2)
+
+dpcs <- getDenoisedPCs(x = assay(glomer_sce, 2), 
+                       technical = glomer_variance2, 
+                       subset.row = hvgs, 
+                       BPPARAM = MulticoreParam(12))
+dpcs %>% names
+dpcs$components %>% dim
+percentvar <- dpcs$percent.var
+elbow <- findElbowPoint(percentvar)
+data.frame(PC = 1:length(percentvar), 
+           percentvar = percentvar) %>% 
+    ggplot(aes(PC, percentvar)) +
+    geom_point() +
+    geom_line() +
+    geom_vline(xintercept = elbow, linetype = 2)
+
+reducedDim(glomer_sce, "PCA") <- dpcs$components[, 1:elbow]
+glomer_sce <- runTSNE(glomer_sce, use.dimred = "PCA", perplexity = 10)
+
+plotReducedDim(glomer_sce, 
+               dimred = "TSNE", 
+               colour_by = "qclusters", 
+               point_size = 0.5)
+```
+
+
+```{r}
+# clustering
+clusters <- clusterRows(reducedDim(glomer_sce, "TSNE"), 
+                        BLUSPARAM = NNGraphParam(cluster.fun = "louvain",
+                                                 k = 50, 
+                                                 BPPARAM = MulticoreParam(10)))
+clusters %>% table
+
+colLabels(glomer_sce) <- factor(clusters)
+```
+
+
+```{r}
+source("R/idconv.R")
+library(patchwork)
+plotReducedDim(glomer_sce, 
+               dimred = "TSNE", 
+               # colour_by = "percent_mito",
+               colour_by = idconv("Adrb1"),
+               text_by = "label", 
+               point_size = 0.4)  
+plotReducedDim(glomer_sce, 
+               dimred = "TSNE", 
+               colour_by = idconv("Ehd3"), 
+               text_by = "label", 
+               point_size = 0.4)
+
+plotExpression(glomer_sce, 
+               features = idconv("Pax8"), 
+               x = "label",
+               colour_by = "label")
+```
+
+```{r}
+# cell type annotation
+cell_type <- c("1" = "Mesangial", 
+               "2" = "parietal Endothelia", 
+               "3" = "arteriolar Endothelia",
+               "4" = "Mesangial",
+               "5" = "Podocyte", 
+               "6" = "PEC",
+               "7" = "Podocyte", 
+               "8" = "Podocyte", 
+               "9" = "capillary Endothelia", 
+               "10" = "capillary Endothelia", 
+               "11" = "Immune cells",
+               "12" = "capillary Endothelia", 
+               "13" = "capillary Endothelia", 
+               "14" = "VSMC")
+
+glomer_sce$celltype <- cell_type[glomer_sce$label]
+glomer_sce %>% colData
+
+# remove immune cells
+glomer_sce <- glomer_sce[, !(glomer_sce$celltype == "Immune cells")]
+
+saveRDS(glomer_sce, "../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
+```

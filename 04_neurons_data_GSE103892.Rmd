@@ -1,0 +1,75 @@
+---
+title: "04 neurons data GSE103892"
+author: "YinCY"
+date: "2023-03-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# prepare neuron cells
+data from GSE103892
+```{r}
+library(data.table)
+library(dplyr)
+
+neurons <- fread("../data/GSE103892/GSE103892_Expression_Count_Matrix.txt.gz", 
+                 header = T) %>% 
+    as.data.frame()
+neuron_cells_info <- read.table("../data/GSE103892/GSE103892_Sample_Cell_Cluster_Information.txt.gz", 
+                               sep = "\t", 
+                               header = T)
+neuron_cell_info %>% dim; neurons %>% dim
+rownames(neuron_cells_info) <- neuron_cells_info$sample_cellbarcode
+
+# gene annotation
+library(AnnotationHub)
+ah <- AnnotationHub()
+query(ah, c("Mus musculus", "ensembl", "EnsDb"))
+ensdb <- ah[["AH104895"]]
+ensdb %>% columns
+
+neurons$Gene %>% duplicated() %>% table()
+neurons$ensembl <- mapIds(ensdb, 
+                          keys = neurons$Gene, 
+                          keytype = "SYMBOL", 
+                          column = "GENEID")
+neurons <- neurons %>% relocate(ensembl)
+neurons[1:10, 1:6]
+neurons <- neurons %>% dplyr::filter(!is.na(ensembl)) 
+gene_df <- neurons[, 1:2]
+rownames(gene_df) <- gene_df$ensembl
+neurons$ensembl %>% duplicated() %>% table
+neurons <- neurons %>% dplyr::select(-Gene) %>% tibble::column_to_rownames("ensembl") %>% as.matrix()
+
+ids <- match(colnames(neurons), neuron_cells_info$sample_cellbarcode)
+ids %>% str
+neuron_cells_info <- neuron_cells_info[ids, ]
+
+library(SingleCellExperiment)
+neurons_sce <- SingleCellExperiment(assays = list(counts = as(neurons, "CsparseMatrix")), 
+                                    rowData = gene_df, 
+                                    colData = neuron_cells_info)
+neurons_sce %>% colData()
+saveRDS(neurons_sce, "../data/GSE103892/neurons_sce.rds")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
