@@ -10,78 +10,6 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-# SRP135960
-```{r}
-library(magrittr)
-library(loomR)
-source("R/loom2SCE.R")
-
-
-all_loom <- connect("../data/kidney/kidney-map/SRP135960/l5_all.loom", mode = "r+")
-all_loom[["col_attrs"]] %>% as.list() %>% .[["names"]]
-all_loom[["col_attrs/Tissue"]][] %>% table
-tissues <- c("Sympath", "DRG")
-col_ids <- which(all_loom[["col_attrs/Tissue"]][] %in% tissues)
-col_ids %>% str
-
-DRG_Sym_loom <- subset.loom(x = all_loom, 
-                            m = col_ids, 
-                            filename = "../data/kidney/kidney-map/SRP135960/l5_DRG_Sym.loom")
-all_loom$close_all()
-DRG_Sym_loom <- connect("../data/kidney/kidney-map/SRP135960/l5_DRG_Sym.loom")
-drg_sym_sce <- loom2SCE(DRG_Sym_loom)
-drg_sym_sce %>% colData
-colData(drg_sym_sce)$TaxonomyRank4 %>% table
-
-saveRDS(drg_sym_sce, "../data/kidney/kidney-map/SRP135960/drg_sym_sce.rds")
-```
-
-
-```{r}
-drg_sym_sce <- readRDS("../data/kidney/kidney-map/SRP135960/drg_sym_sce.rds")
-# quality control
-# only retain sensory, sympathetic neurons and Schwann cells and sympathe
-cells_to_remove <- c("Satellite glia", "Vascular endothelial cells", "Vascular smooth muscle cells")
-colData(drg_sym_sce)[, c("TaxonomyRank4", "Tissue")] %>% table
-drg_sym_sce <- drg_sym_sce[, !(drg_sym_sce$TaxonomyRank4 %in% cells_to_remove)]
-
-# normalization
-library(scran)
-
-drg_sym_sce <- computePooledFactors(drg_sym_sce, clusters = colData(drg_sym_sce)$TaxonomyRank4)
-drg_sym_sce <- logNormCounts(drg_sym_sce)
-
-# model gene variance
-variance <- modelGeneVar(drg_sym_sce, block = colData(drg_sym_sce)$batch)
-hvgs <- getTopHVGs(variance, 
-                   fdr.threshold = 0.001)
-hvgs %>% str
-
-# dimensional reduction
-library(scater)
-npcs <- calculatePCA(logcounts(drg_sym_sce), subset_row = hvgs)
-
-library(PCAtools)
-elbow <- findElbowPoint(attr(npcs, "percentVar"))
-reducedDim(drg_sym_sce, "PCA") <- npcs[, 1:elbow]
-drg_sym_sce <- runTSNE(drg_sym_sce, dimred = "PCA")
-
-source("R/idconv.R")
-plotTSNE(drg_sym_sce, 
-         # colour_by = "TaxonomyRank4", 
-         colour_by = idconv("Snap25"))
-
-# clustering
-library(bluster)
-clusters <- clusterRows(reducedDim(drg_sym_sce, "PCA"), 
-                        BLUSPARAM = NNGraphParam(cluster.fun = "louvain", k = 40))
-clusters %>% table
-colLabels(drg_sym_sce) <- clusters
-plotTSNE(drg_sym_sce, colour_by = "label", text_by = "label")
-saveRDS(drg_sym_sce, "../data/kidney/kidney-map/SRP135960/drg_sym_sce.rds")
-```
-
-
 # GSE175421
 Drop-seq sensory nerve from L1-L6
 ```{r}
@@ -94,7 +22,7 @@ library(janitor)
 library(purrr)
 library(tidyr)
 
-cell_barcode_ids <- read.csv("../data/kidney/kidney-map/GSE175421/GSE175421_cell-barcode-ids.csv.gz") %>% 
+cell_barcode_ids <- read.csv("../data/kidney-map/GSE175421/GSE175421_cell-barcode-ids.csv.gz") %>% 
     clean_names()
 cell_barcode_ids %>% dim
 cell_barcode_ids %>% head
@@ -106,12 +34,15 @@ colnames(drg_cell_barcode_ids)[[1]] <- "barcode"
 rownames(drg_cell_barcode_ids) <- drg_cell_barcode_ids$barcode
 drg_cell_barcode_ids <- drg_cell_barcode_ids %>% 
     mutate(barcode = paste(str_extract_before(barcode, "_"), library_id, sep = "_"))
+rownames(drg_cell_barcode_ids) <- drg_cell_barcode_ids$barcode
+
 drg_cell_barcode_list <- split(drg_cell_barcode_ids, f = drg_cell_barcode_ids$library_id)
 
-files <- dir_ls("../data/kidney/kidney-map/GSE175421/", regexp = "*.txt.gz$")
+files <- dir_ls("../data/kidney-map/GSE175421/", regexp = "*.txt.gz$")
 samples <- str_extract_between(basename(files), pattern1 = "_", pattern2 = "\\.", 
                                which_pattern1 = "first", which_pattern2 = "first") %>% 
     gsub("rep", "", .)
+
 
 # drg counts table
 drg_list <- list()
@@ -122,6 +53,7 @@ for(i in seq_along(files)){
     drg_list[[samples[[i]]]] <- cur
 }
 drg_cell_barcode_list %>% names; drg_list %>% names
+
 
 # filter cells
 for( i in samples){
@@ -181,12 +113,12 @@ library(Matrix)
 drg_sce <- SingleCellExperiment(assays = list(counts = as(as.matrix(drg_counts_table), "CsparseMatrix")), 
                                 rowData = gene_df, 
                                 colData = drg_cell_barcode_ids)
-saveRDS(drg_sce, "../data/kidney/kidney-map/GSE175421/drg_sce.rds")
+saveRDS(drg_sce, "../data/kidney-map/GSE175421/drg_sce.rds")
 ```
 
 
 ```{r}
-drg_sce <- readRDS("../data/kidney/kidney-map/GSE175421/drg_sce.rds")
+drg_sce <- readRDS("../data/kidney-map/GSE175421/drg_sce.rds")
 # remove Fibroblasts, Macrophages, Mural Cells, Satellite Glia, T Cells, Sympathetic Neurons
 drg_sce %>% colData %>% .$main_cluster %>% table
 cells_to_remove <- c("Fibroblasts", "Macrophages", "Mural Cells", "T Cells", "Sympathetic Neurons")
@@ -218,79 +150,25 @@ plot(attr(npcs, "percentVar"))
 
 drg_sce <- runTSNE(drg_sce, dimred = "PCA", perplexity = 20)
 plotTSNE(drg_sce, 
-         colour_by = "main_cluster",
-         # colour_by = idconv("Calca"),
+         # colour_by = "main_cluster",
+         colour_by = idconv("Th"),
          point_size = 0.5)
 
 source("R/idconv.R")
-plotExpression(drg_sce, features = idconv("Trpv2"), 
+plotExpression(drg_sce, features = idconv("Th"), 
                x = "main_cluster")
 
-saveRDS(drg_sce, "../data/kidney/kidney-map/GSE175421/drg_sce.rds")
+saveRDS(drg_sce, "../data/kidney-map/GSE175421/drg_sce.rds")
+drg_sce %>% colData
 ```
+
 
 
 
 
 # GSE78845
 Fluidigm C1 sequencer
-T1-T12
-```{r}
-library(dplyr)
-library(tidyr)
-library(tibble)
-
-sym <- read.table("../data/kidney/kidney-map/GSE78845/GSE78845_Furlan_et_al_Expression.tab")
-sym %>% dim
-sym[1:10, 1:5]
-
-library(AnnotationHub)
-ah <- AnnotationHub()
-query(ah, c("EnsDb", "Mus musculus"))
-ensdb <- ah[["AH104895"]]
-
-library(org.Mm.eg.db)
-
-cell_info <- data.frame(barcode = colnames(sym))
-rownames(cell_info) <- cell_info$barcode
-gene_df <- data.frame(symbol = rownames(sym))
-gene_df$ensembl <- mapIds(ensdb, 
-                          keys = gene_df$symbol, 
-                          keytype = "SYMBOL", 
-                          column = "GENEID")
-gene_df %>% head
-gene_df$symbol %>% duplicated() %>% table
-gene_df$ensembl %>% duplicated() %>% table
-gene_df$ensembl %>% is.na() %>% table
-
-sym <- sym %>% rownames_to_column("symbol") %>% right_join(gene_df) %>% relocate("ensembl")
-sym <- sym %>% dplyr::filter(!is.na(ensembl)) %>% column_to_rownames("ensembl") %>% dplyr::select(-symbol)
-gene_df <- gene_df %>% dplyr::filter(!is.na(ensembl))
-rownames(gene_df) <- gene_df$ensembl
-
-sym[1:10, 1:5]
-library(SingleCellExperiment)
-library(Matrix)
-
-sym_sce <- SingleCellExperiment(assays = list(counts = as(as.matrix(sym), "CsparseMatrix")), 
-                                rowData = gene_df, 
-                                colData = cell_info)
-saveRDS(sym, "../data/kidney/kidney-map/GSE78845/sym_sce.rds")
-```
-
-```{r}
-library(scran)
-qclusters <- quickCluster(sym, min.size = 10)
-qclusters %>% table
-colData(sym_sce)$qcluster <- qclusters
-colData(sym_sce)
-
-is.mito <- grepl("^mt-", mapIds(ensdb, keys = rownames(sym_sce), keytype = "GENEID", column = "SEQNAME"), ignore.case = T)
-is.mito %>% table
-rowData(sym_sce)$symbol[is.mito]
-stats <- perCellQCMetrics(sym, )
-```
-
+T1-T12 sympathetic ganglia
 
 # reanalysis GSE78845
 ```{r}
@@ -367,10 +245,14 @@ saveRDS(feature_counts, "../data/kidney/kidney-map/GSE78845/feature_counts.rds")
 
 # create SCE object
 ```{r}
-library(GEOquery)
-sample_info <- getGEO(GEO = "GSE78845")
+library(magrittr)
+library(dplyr)
+library(janitor)
 
-feature_counts <- readRDS("../data/kidney/kidney-map/GSE78845/feature_counts.rds")
+run_info <- read.table("../data/kidney-map/GSE78845/SraRunTable.txt", sep = ",", header = TRUE) %>% clean_names()
+rownames(run_info) <- run_info$run
+
+feature_counts <- readRDS("../data/kidney-map/GSE78845/feature_counts.rds")
 gene_df <- data.frame(ensembl = rownames(feature_counts$counts))
 
 library(AnnotationHub)
@@ -383,14 +265,77 @@ gene_df$symbol <- mapIds(ensdb,
                          keys = gene_df$ensembl, 
                          keytype = "GENEID", 
                          column = "SYMBOL")
-gene_df
+gene_df$chr <- mapIds(ensdb, 
+                      keys = gene_df$ensembl, 
+                      keytype = "GENEID", 
+                      column = "SEQNAME")
+rownames(gene_df) <- gene_df$ensembl
 
 mtx <- feature_counts$counts
 mtx[1:10, 1:5]
-cell_df <- data.frame(cells = colnames(mtx))
+colnames(mtx) <- gsub(".bam", "", colnames(mtx))
 
+
+library(SingleCellExperiment)
+library(Matrix)
+
+sym_sce <- SingleCellExperiment(assays = list(counts = as(mtx, "CsparseMatrix")), 
+                                rowData = gene_df, 
+                                colData = run_info)
+
+rd <- counts(sym_sce) %>% rowSums() > 0
+cd <- counts(sym_sce) %>% colSums() > 100
+sym_sce <- sym_sce[rd, cd]
+sym_sce
+saveRDS(sym_sce, "../data/kidney-map/GSE78845/sym_sce.rds")
 ```
 
+
+# analysis
+```{r}
+# quality control
+library(scuttle)
+library(scran)
+library(scater)
+
+
+is.mito <- which(rowData(sym_sce)$chr == "MT")
+is.mito %>% table
+colData(sym_sce)$mito_percent <- round(colSums(counts(sym_sce)[is.mito, ]) / colSums(counts(sym_sce)), digits = 5) * 100
+sym_sce %>% colData
+
+clusters <- quickCluster(sym_sce, min.size = 20)
+clusters %>% str
+colData(sym_sce)$qclusters <- factor(clusters)
+
+table(colData(sym_sce)$qclusters, colData(sym_sce)$celltype_identifier)
+
+sym_sce <- computePooledFactors(sym_sce, clusters = sym_sce$qclusters)
+sym_sce <- logNormCounts(sym_sce)
+
+# model gene variance
+dec_var <- modelGeneVar(sym_sce, block = sym_sce$sex)
+dec_var[order(dec_var$bio, decreasing = T), ]
+
+hvgs <- getTopHVGs(dec_var, fdr.threshold = 0.01)
+hvgs %>% str
+
+# dimensional reduction
+npcs <- calculatePCA(logcounts(sym_sce), ncomponents = 20, subset_row = hvgs)
+library(PCAtools)
+elbow <- findElbowPoint(attr(npcs, "percentVar"))
+reducedDim(sym_sce, "PCA") <- npcs[, 1:elbow]
+
+sym_sce <- runTSNE(sym_sce, dimred = "PCA", perplexity = 10)
+sym_sce <- runUMAP(sym_sce, dimred = "PCA")
+
+source("R/idconv.R")
+library(patchwork)
+plotTSNE(sym_sce, 
+         # colour_by = "qclusters", 
+         colour_by = idconv("Th"))
+saveRDS(sym_sce, "../data/kidney-map/GSE78845/sym_sce.rds")
+```
 
 
 
