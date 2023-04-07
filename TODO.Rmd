@@ -1,0 +1,21 @@
+---
+title: "TODO"
+author: "yincy"
+date: "2023-04-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# analysis to do with integrated data 
+1. Interactions between sympathetic nerve with epithelial cells
+
+2. Interaction between sensor nerve with immune cells
+
+3. functional difference of macrophages in different regions
+
+4. functional difference of endothelial cells 
+
+5. highlight metebolic active endothelial cell's specificity
