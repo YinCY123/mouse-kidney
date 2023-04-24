@@ -31,7 +31,7 @@ do_scatter <- function(umap_use, meta_data, label_name, no_guides = TRUE,
         labs(x = "PC 1", y = "PC 2") 
     
     if (do_points) 
-        plt <- plt + geom_point(shape = '.')
+        plt <- plt + geom_point(shape = 19)
     if (do_density) 
         plt <- plt + geom_density_2d()    
     

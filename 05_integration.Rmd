@@ -1,7 +1,7 @@
 ---
 title: "integration"
 author: "YinCY"
-date: "`r Sys.Date()`"
+date: 2023-0330
 output: html_document
 ---
 
@@ -9,7 +9,205 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Prepare for integration
 ```{r}
-library(RISC)
+library(harmony)
+library(dplyr)
+
+sym_sce <- readRDS("../data/kidney/kidney-map/GSE78845/sym_sce.rds")
+drg_sce <- readRDS("../data/kidney/kidney-map/GSE175421/drg_sce.rds")
+glomer_sce <- readRDS("../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
+dev_cell_sce <- readRDS("../data/kidney/kidney-map/GSE129798/dev_cell_sce.rds")
+colnames(dev_cell_sce) <- dev_cell_sce$Barcode
+colData(dev_cell_sce) <- transform(colData(dev_cell_sce), 
+                                   cell_type = paste(region, location, cell_type, sep = "_"))
+
+# unify cell names
+sample_meta <- data.frame(
+    cell_ids = c(colnames(drg_sce), colnames(sym_sce), 
+                 colnames(glomer_sce), colnames(dev_cell_sce)),
+    
+    geo_accession = rep(c("GSE175421", "GSE78845", "GSE146912", "GSE129798"), 
+                        times = c(dim(drg_sce)[2], dim(sym_sce)[2], 
+                                  dim(glomer_sce)[2], dim(dev_cell_sce)[2])), 
+    
+    cell_type = c(drg_sce$main_cluster, sym_sce$cell_type, 
+                  glomer_sce$cell_type, dev_cell_sce$cell_type))
+rownames(sample_meta) <- sample_meta$cell_ids
+sample_meta
+
+source("R/harmoniseSCE.R")
+counts <- harmonizeSCE(sce_list = list(drg_sce, sym_sce, glomer_sce, dev_cell_sce), method = "harmony")
+
+library(AnnotationHub)
+ah <- AnnotationHub()
+query(ah, c("Mus musculus", "EnsDb"))
+ensdb <- ah[["AH104895"]]
+gene_df <- data.frame(ensembl = rownames(counts), 
+                      symbol = mapIds(ensdb, keys = rownames(counts), keytype = "GENEID", column = "SYMBOL"))
+gene_df %>% head
+
+sces <- SingleCellExperiment(assays = list(counts = counts), 
+                             rowData = gene_df, 
+                             colData = sample_meta)
+sces
 ```
+
+
+# Integration with harmony
+```{r}
+library(scran)
+library(scater)
+library(batchelor)
+
+sces <- multiBatchNorm(sces, batch = sces$geo_accession, normalize.all = TRUE)
+
+vars <- modelGeneVar(sces, block = sces$geo_accession)
+hvgs <- getTopHVGs(vars, n = 2000)
+hvgs %>% str
+
+
+npcs <- calculatePCA(sces, subset_row = hvgs)
+library(PCAtools)
+elbow <- findElbowPoint(attr(npcs, "percentVar"))
+reducedDim(sces, "PCA") <- npcs[, 1:20]
+
+sces <- RunHarmony(object = sces, 
+                   group.by.vars = "geo_accession", 
+                   reduction.save = "harmony")
+
+sces <- runTSNE(sces, dimred = "harmony")
+sces <- runUMAP(sces, dimred = "harmony")
+# sces <- readRDS("../data/kidney/kidney-map/sces_harmony.rds")
+colData(sces) <- transform(colData(sces), 
+                           region = regmatches())
+
+plotTSNE(sces, 
+         colour_by = "cell_type", 
+         point_size = 0.5, 
+         text_by = "cell_type", 
+         text_size = 2) +
+    theme(legend.position = "none")
+
+ggsave("harmony_test.pdf")
+saveRDS(sces, "../data/kidney/kidney-map/harmonized_sce.rds")
+```
+
+
+# Integration with RISC
+## Prepare for integration
+```{r}
+library(SingleCellExperiment)
+library(batchelor)
+library(magrittr)
+library(RISC)
+
+
+sym_sce <- readRDS("../data/kidney/kidney-map/GSE78845/sym_sce.rds")
+drg_sce <- readRDS("../data/kidney/kidney-map/GSE175421/drg_sce.rds")
+glomer_sce <- readRDS("../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
+dev_cell_sce <- readRDS("../data/kidney/kidney-map/GSE129798/dev_cell_sce.rds")
+colnames(dev_cell_sce) <- dev_cell_sce$Barcode
+colData(dev_cell_sce)$cell_ids <- colData(dev_cell_sce)$Barcode 
+colData(dev_cell_sce)$Barcode <- NULL
+colData(dev_cell_sce) <- transform(colData(dev_cell_sce), 
+                                   region = sapply(region, FUN = function(x){
+                                       switch(x, 
+                                              "Z1" = "cortex", 
+                                              "Z2" = "outer medulla", 
+                                              "Z3" = "inner medulla")
+                                          }))
+colData(dev_cell_sce) <- transform(colData(dev_cell_sce), 
+                                   cell_type = ifelse(nchar(location) == 0, 
+                                                        paste(region, cell_type, sep = "_"), paste(location, cell_type, sep = "_")))
+
+sces <- list(dev_cell = dev_cell_sce, drg = drg_sce, glomer = glomer_sce, sym = sym_sce)
+source("R/harmoniseSCE.R")
+sces <- harmonizeSCE(sces, method = "RISC")
+
+library(batchelor)
+sces <- multiBatchNorm(sces[[1]], sces[[2]], sces[[3]], sces[[4]])
+
+source("R/createRISC.R")
+sces <- createRISC(sce_list = sces)
+
+# skip filtering and normalization
+pro <- function(x, ...){
+    x@metadata$filter <- data.frame(min.UMI = 0, 
+                                    max.UMI = Inf, 
+                                    min.gene = 0, 
+                                    min.cell = 0)
+    x@metadata$normalise <- "MultibatchNorm"
+    
+    return(x)
+}
+
+sces <- lapply(sces, pro)
+
+preprocess <- function(x, ...){
+    x <- scDisperse(x)
+    
+    # replace highly variable gene with all gene for integration
+    # x@vargene <- rownames(x@rowdata)
+    
+    return(x)
+}
+
+sces <- lapply(sces, preprocess)
+
+# var_genes <- Reduce(union, lapply(sces, function(x){x@vargene})) %>% unique()
+var_genes <- rownames(sces[[1]]@assay$logcounts)
+var_genes %>% str
+
+scMultiIntegrate(objects = sces, 
+                 eigens = 30, 
+                 var.gene = var_genes, 
+                 align = "Predict", 
+                 npc = 50, 
+                 ncore = 10, 
+                 seed = 123)
+sces_RISC <- .Last.value
+sces_RISC <- scTSNE(sces_RISC, npc = 50, use = "PLS", perplexity = 10)
+
+cord <- sces_RISC@DimReduction$cell.tsne
+cols <- sces_RISC@coldata
+library(dplyr)
+df <- left_join(cols, as.data.frame(cord) %>% tibble::rownames_to_column("Barcode"))
+df %>% head
+
+library(ggplot2)
+library(stringr)
+
+location <- df %>% 
+    mutate(cell = ifelse(str_detect(cell_type, "_"),  str_replace(cell_type, "^[a-z ]{0,}_", ""), cell_type)) %>% 
+    group_by(cell) %>% 
+    mutate(x = median(tSNE1), 
+           y = median(tSNE2)) %>% 
+    distinct(x, y, .keep_all = TRUE)
+
+# locations to remove
+l <- c("PTS1_PTS2", "PTS1_PTS3", "PTS2_PTS1","PTS2_PTS3", "PTS3_PTS1", "PTS3_PTS2", 
+       "MTAL_PTS2", "CTAL_PTS2", "DCT_PTS2", "DTL1_PTS1", "DTL2_PTS2", "DTL1_PTS2")
+location <- location %>% 
+    filter(!(cell %in% l))
+
+df %>% 
+    mutate(cell = ifelse(str_detect(cell_type, "_"),  str_replace(cell_type, "^[a-z ]{0,}_", ""), cell_type)) %>% 
+    ggplot(aes(tSNE1, tSNE2)) +
+    geom_point(aes(color = cell), size = 0.5, alpha = 1/3) +
+    geom_text(data = location, aes(x, y, label = cell), size = 2) +
+    theme(legend.position = "none")
+
+ggsave("RISC_test.pdf")
+```
+
+
+
+# Integration with fastMNN
+
+
+
+
+
+
 

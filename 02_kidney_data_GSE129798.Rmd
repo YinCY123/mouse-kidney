@@ -19,7 +19,7 @@ library(scuttle)
 library(scater)
 library(magrittr)
 
-dev_cell_sce <- read10xCounts("../data/kidney/kidney-map/dev-cell/Mouse_Adult_DGE/")
+dev_cell_sce <- read10xCounts(samples = "../data/kidney/kidney-map/GSE129798/Mouse_Adult_DGE/", type = "sparse")
 dev_cell_sce %>% colData()
 dev_cell_sce %>% rowData() %>% .$ID %>% duplicated() %>% table
 
