@@ -1,0 +1,50 @@
+---
+title: "01.1_reprocess_GSE150338"
+author: "yincy"
+date: "2023-04-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(fs)
+library(magrittr)
+run_table <- read.table("data/GSE150338_SraRunTable.txt", sep = ",", header = TRUE)
+
+
+base_url <- "https://trace.ncbi.nlm.nih.gov/Traces/sra-reads-be/fastq?acc="
+urls <- paste(base_url, run_table$Run, sep = "")
+write.table(urls, "data/GSE150338_fastq_urls.txt", row.names = F, col.names = F, quote = F)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
