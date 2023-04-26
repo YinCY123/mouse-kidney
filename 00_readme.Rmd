@@ -1,5 +1,5 @@
 ---
-title: "mouse kidney"
+title: "README"
 author: "YinCY"
 date: 2023-03-01
 output: html_document
@@ -20,11 +20,6 @@ knitr::opts_chunk$set(echo = TRUE)
 6. GSE150338: microdissected mouse tubules sequencing data, for reference  
 
 remove some very few cells from each dataset.
-
-
-
-
-
 
 
 

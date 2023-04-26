@@ -19,7 +19,9 @@ library(scuttle)
 library(scater)
 library(magrittr)
 
-dev_cell_sce <- read10xCounts(samples = "../data/kidney/kidney-map/GSE129798/Mouse_Adult_DGE/", type = "sparse")
+dev_cell_sce <- read10xCounts(samples = "../data/kidney/kidney-map/GSE129798/Mouse_Adult_DGE/", 
+                              type = "sparse", 
+                              col.names = TRUE)
 dev_cell_sce %>% colData()
 dev_cell_sce %>% rowData() %>% .$ID %>% duplicated() %>% table
 
@@ -56,6 +58,7 @@ table(colData(dev_cell_sce)$gender);table(colData(dev_cell_sce)$batch);table(col
 is_mito <- grepl("^mt-", rowData(dev_cell_sce)$ID, ignore.case = F)
 is_mito %>% table
 rowData(dev_cell_sce)$ID[is_mito] %>% sort
+colData(dev_cell_sce)$mito_percent <- round((colSums2(assay(dev_cell_sce[is_mito, ])) / colSums2(assay(dev_cell_sce))) * 100, 4)
 
 qclusters <- quickCluster(dev_cell_sce, 
                          min.size = 1000, 
@@ -66,93 +69,35 @@ qclusters %>% table
 colData(dev_cell_sce)$quick_cluster <- qclusters
 
 library(tibble)
+library(patchwork)
 colData(dev_cell_sce) %>% 
     as_tibble() %>% 
     ggplot(aes(region, quick_cluster)) +
-    geom_jitter(size = 0.1)
-
-colData(dev_cell_sce)$mito_percent <- round((colSums2(assay(dev_cell_sce[is_mito, ])) / colSums2(assay(dev_cell_sce))) * 100, 4)
+    geom_jitter(size = 0.1) +
 
 colData(dev_cell_sce) %>% 
     as_tibble() %>% 
-    ggplot(aes(quick_cluster, mito_percent)) +
+    ggplot(aes(region, mito_percent)) +
     geom_jitter(size = 0.1)
 
-# source("R/splitCols.R")
-# sces <- splitCols(dev_cell_sce, f = qclusters)
-# 
-# qc_list <- vector(mode = "list")
-# is_mito_list <- split(is_mito, qclusters)
-# for(name in names(sces)){
-#     qc_list[[name]] <- perCellQCMetrics(sces[[name]], 
-#                                      subsets = list(mito = is_mito_list[[name]]))
-# }
-# 
-# qc_filter_list <- vector(mode = "list", length = length(qc_list))
-# names(qc_filter_list) <- names(qc_list)
-# for(name in names(qc_list)){
-#     qc_filter_list[[name]] <- perCellQCFilters(qc_list[[name]], sub.fields = TRUE)
-# }
-# qc_filter_list %>% sapply(FUN = function(x){
-#     x[["discard"]] %>% table
-# })
-
-dev_cell_sce <- addPerCellQCMetrics(dev_cell_sce, subsets = list(mito = is_mito))
-dev_cell_sce %>% colData
-qc <- perCellQCMetrics(dev_cell_sce, subsets = list(mito = is_mito))
-qc_filter <- perCellQCFilters(qc, sub.fields = TRUE, log = TRUE)
-qc_filter %>% as.data.frame() %>% colSums()
-
-library(patchwork)
-dev_cell_sce[, qc_filter$discard] %>% 
-    colData() %>% 
-    as_tibble() %>% 
-    ggplot(aes(quick_cluster, mito_percent)) +
-    geom_jitter(width = 0.2, size = 0.1) +
-dev_cell_sce[, !qc_filter$discard] %>% 
-    colData() %>% 
-    as_tibble() %>% 
-    ggplot(aes(quick_cluster, mito_percent)) +
-    geom_jitter(width = 0.2, size = 0.1) +
-dev_cell_sce %>% 
-    colData() %>% 
-    as_tibble() %>% 
-    ggplot(aes(detected, mito_percent)) +
-    geom_jitter(width = 0.1, size = 0.1) +
-    geom_vline(xintercept = 1000) +
-    geom_hline(yintercept = 50) +
-dev_cell_sce %>% 
-    colData %>% 
-    as_tibble %>% 
-    ggplot(aes(total, mito_percent)) +
-    geom_jitter(width = 0.1, size = 0.1) +
-    geom_vline(xintercept = 5000) +
-    geom_hline(yintercept = 50)
-
-dev_cell_sce %>% 
-    colData() %>% 
-    as_tibble() %>% 
-    ggplot(aes(detected, mito_percent)) +
-    geom_jitter(aes(colour = qc_filter$low_n_features), width = 0.1, size = 0.1)
+stats <- perCellQCMetrics(dev_cell_sce, subsets = list(mito = is_mito))
+qc <- perCellQCFilters(stats, sub.fields = "subsets_mito_percent")
+qc %>% as.matrix() %>% colSums()
 
 # filter based on number of features
-dev_cell_sce <- dev_cell_sce[, !qc_filter$low_n_features]
-
-saveRDS(dev_cell_sce, 
-        "../data/kidney/kidney-map/dev-cell/dev_cell_sce.rds")
+dev_cell_sce <- dev_cell_sce[, !qc$low_n_features]
 ```
 
 ```{r}
 # normalization
-dec_sf_dev_cell <- calculateSumFactors(dev_cell_sce, clusters = colData(dev_cell_sce)$quick_cluster)
+dec_sf_dev_cell <- pooledSizeFactors(dev_cell_sce, clusters = colData(dev_cell_sce)$quick_cluster)
 sizeFactors(dev_cell_sce) <- dec_sf_dev_cell
 colData(dev_cell_sce)
-dev_cell_sce <- computeLibraryFactors(dev_cell_sce)
 
 dev_cell_sce <- logNormCounts(dev_cell_sce)
 dev_cell_sce
-saveRDS(dev_cell_sce, "../data/kidney/kidney-map/dev-cell/dev_cell_sce_0114.rds")
 ```
+
 
 ```{r}
 # feature selection
@@ -163,16 +108,8 @@ library(scran)
 library(scater)
 library(BiocParallel)
 
-colData(dev_cell_sce)
 dec_dev_cell <- modelGeneVar(dev_cell_sce, block = colData(dev_cell_sce)$batch)
 dec_dev_cell[order(dec_dev_cell$bio, decreasing = T), ]
-
-dec_pos_dev_cell <- modelGeneVarByPoisson(dev_cell_sce, size.factors = dev_cell_sce$sizeFactor, block = colData(dev_cell_sce)$batch)
-dec_pos_dev_cell[order(dec_pos_dev_cell$bio, decreasing = T), ]
-
-# dec_cv2_dev_cell <- modelGeneCV2(x = dev_cell_sce, 
-#                                  size.factor = sizeFactors(dev_cell_sce))
-# dec_cv2_dev_cell[order(dec_cv2_dev_cell$FDR, decreasing = F), ]
 ```
 
 ```{r}
@@ -187,29 +124,6 @@ for(i in 1:ncol(dec_dev_cell$per.block)){
 ```
 
 
-```{r}
-par(mfrow = c(1, 3))
-for(i in 1:ncol(dec_pos_dev_cell$per.block)){
-    plot(metadata(dec_pos_dev_cell$per.block[[i]])$mean, 
-         metadata(dec_pos_dev_cell$per.block[[i]])$var, 
-         pch = 19, cex = 0.5, 
-         main = paste0("Pois_", names(dec_pos_dev_cell$per.block)[[i]]))
-    curve(metadata(dec_pos_dev_cell$per.block[[i]])$trend(x), col = "red", lwd = 2, add = TRUE)
-}
-```
-
-```{r}
-# par(mfrow = c(2, 3))
-# for(i in 1:ncol(dec_cv2_dev_cell$per.block)){
-#     plot(metadata(dec_cv2_dev_cell$per.block[[i]])$mean, 
-#          metadata(dec_cv2_dev_cell$per.block[[i]])$var, 
-#          pch = 19, lwd = 2, 
-#          main = paste0("CV2_", names(dec_cv2_dev_cell$per.block)[[i]]))
-#     curve(metadata(dec_cv2_dev_cell$per.block[[i]])$trend(x), col = "red", lwd = 2, add = TRUE)
-# }
-```
-
-
 
 ```{r}
 dev_cell_hvgs <- getTopHVGs(stats = dec_dev_cell, 
@@ -219,13 +133,13 @@ dev_cell_hvgs <- getTopHVGs(stats = dec_dev_cell,
 dev_cell_hvgs %>% str
 
 # choosing the number of PCs
-dev_cell_sce <- runPCA(dev_cell_sce, subset_row = dev_cell_hvgs, ncomponents = 50)
-percentvar <- reducedDim(dev_cell_sce, "PCA") %>% attr(which = "percentVar")
+npcs <- calculatePCA(dev_cell_sce, subset_row = dev_cell_hvgs, ncomponents = 50)
+percentvar <- attr(npcs, which = "percentVar")
 
 library(PCAtools)
 elbow <- findElbowPoint(percentvar)
 
-df <- data.frame(PCs = 1:dim(reducedDim(dev_cell_sce, "PCA"))[2], 
+df <- data.frame(PCs = 1:dim(npcs)[2], 
                  percentvar = percentvar)
 
 df %>% 
@@ -235,47 +149,18 @@ df %>%
     geom_vline(xintercept = elbow) +
     scale_y_continuous(trans = "log2")
 
-npcs <- denoisePCA(dev_cell_sce, technical = dec_pos_dev_cell, subset.row = dev_cell_hvgs) %>% 
-    reducedDim(type = "PCA") %>% ncol
+reducedDim(dev_cell_sce, "PCA") <- npcs[, 1:9]
 
-pcs <- reducedDim(dev_cell_sce, "PCA")
-
-library(bluster)
-choise <- getClusteredPCs(pcs = as.matrix(pcs), 
-                          BLUSPARAM = SNNGraphParam(type = "jaccard", k = 10, BPPARAM = MulticoreParam(workers = 12)))
-choise %>% metadata()
-
-dev_cell_sce <- runPCA(x = dev_cell_sce, 
-                       subset_row = dev_cell_hvgs, 
-                       ncomponents = 9, 
-                       BPPARAM = MulticoreParam(workers = 12))
-
-# determine perplexity
-per <- seq(10, 80, 10) %>% as.character()
-sces <- vector(mode = "list")
-for(i in per){
-    sces[[i]] <- runTSNE(dev_cell_sce, 
-                         dimred = "PCA", 
-                         perplexity = as.integer(i), 
-                         BPPARAM = MulticoreParam(workers = 12))
-}
-
-p <- lapply(sces, FUN = plotTSNE, 
-            colour_by = "quick_cluster", 
-            text_by = "quick_cluster")
-
-
-# using the preplexity of 10
 set.seed(110)
 dev_cell_sce <- runTSNE(x = dev_cell_sce, 
                         dimred = "PCA", 
                         perplexity = 10, 
                         BPPARAM = MulticoreParam(workers = 12))
+
 plotTSNE(dev_cell_sce, 
          colour_by = "quick_cluster", 
-         point_size = 0.2, 
+         point_size = 0.5, 
          text_by = "quick_cluster")
-saveRDS(dev_cell_sce, "../data/kidney/kidney-map/dev-cell/dev_cell_sce.rds")
 ```
 
 
@@ -286,28 +171,37 @@ library(scran)
 library(igraph)
 library(scater)
 library(BiocParallel)
+library(bluster)
 
 grep("^cluster_", ls("package:igraph"), value = T)
 
-graph <- buildSNNGraph(dev_cell_sce, k = 10, use.dimred = "PCA")
-clusters <- cluster_louvain(graph)$membership
+clusters <- clusterRows(reducedDim(dev_cell_sce, "PCA"), 
+                        BLUSPARAM = SNNGraphParam(k = 10, 
+                                                  cluster.fun = "louvain"))
 clusters %>% table
 
-colLabels(dev_cell_sce) <- factor(clusters)
+
+
+colData(dev_cell_sce)$clusters <- factor(clusters)
 colData(dev_cell_sce)
+
+plotTSNE(dev_cell_sce, 
+         colour_by = "clusters", 
+         point_size = 0.5, 
+         text_by = "clusters")
 ```
 
 ```{r}
 # highlight each cluster and sub-cluster
-for( n in levels(colLabels(dev_cell_sce))){
-    my_color <- rep("grey", length(colLabels(dev_cell_sce)))
-    names(my_color) <- as.character(colLabels(dev_cell_sce))
-    my_color[colLabels(dev_cell_sce) == n] <- "red"
+for( n in levels(colData(dev_cell_sce)$clusters)){
+    my_color <- rep("grey", length(colData(dev_cell_sce)$clusters))
+    names(my_color) <- as.character(colData(dev_cell_sce)$clusters)
+    my_color[colData(dev_cell_sce)$clusters == n] <- "red"
     
     plotReducedDim(object = dev_cell_sce, 
                    dimred = "TSNE", 
-                   colour_by = "label", 
-                   text_by = "label", 
+                   colour_by = "clusters", 
+                   text_by = "clusters", 
                    point_size = 0.2) +
         scale_color_manual(values = my_color) +
         guides(colour = guide_legend(override.aes = list(size = 2)))
@@ -320,13 +214,14 @@ for( n in levels(colLabels(dev_cell_sce))){
 ```{r}
 # doublet detection
 library(scDblFinder)
-dbs <- findDoubletClusters(dev_cell_sce)
+dbs <- findDoubletClusters(dev_cell_sce, clusters = colData(dev_cell_sce)$clusters)
+dbs %>% as.data.frame()
 outs <- rownames(dbs)[isOutlier(dbs$median.de, type = "lower", log = TRUE)]
 
-# cluster 2 is doublets
-# remove cluster 2
-dev_cell_sce <- dev_cell_sce[, colLabels(dev_cell_sce) != 2]
-colLabels(dev_cell_sce) <- factor(colLabels(dev_cell_sce), levels = c(1, 3:19))
+# cluster 2 and 15 are doublets
+# remove cluster 2 and 15
+dev_cell_sce <- dev_cell_sce[, !(colData(dev_cell_sce)$clusters %in% c(2, 15))]
+colLabels(dev_cell_sce) <- factor(colData(dev_cell_sce)$clusters, levels = setdiff(1:20, c(2, 15)))
 dev_cell_sce %>% colData()
 ```
 
@@ -337,7 +232,7 @@ markers <- scoreMarkers(x = dev_cell_sce,
                         groups = colLabels(dev_cell_sce))
 
 source("R/idconv.R")
-markers[["15"]][order(markers[["15"]]$min.AUC, decreasing = T), ] %>% 
+markers[["1"]][order(markers[["1"]]$min.AUC, decreasing = T), ] %>% 
     head(50) %>% 
     as.data.frame() %>% 
     rownames() %>% 
@@ -357,11 +252,11 @@ fmarkers[["5"]] %>%
     idconv(from_type = "GENEID", to_type = "SYMBOL")
 
 plotReducedDim(dev_cell_sce, 
-               colour_by = idconv("Mcam"),
+               colour_by = idconv("Csf1r"),
                # colour_by = "mito_percent",
                text_by = "label", 
                dimred = "TSNE", 
-               point_size = 0.2)
+               point_size = 0.5)
 
 idconv("Mcam")
 ggcells(dev_cell_sce, 
@@ -441,31 +336,42 @@ markers <- list(
 )
 
 cell_annotation <- c(
-    "1" = "Endothelia",
+    "1" = "Endothelial",
     "3" = "PTS1",
     "4" = "CD_IC",
+    "5" = "Natural Killer cells",
     "5.1" = "Dendritic cell",
     "5.2" = "Monocyte",
     "6" = "PTS3", 
-    "7" = "Macrophage",
+    "7" = "Macrophages",
     "8" = "DCT",
-    "9" = "Endothelia",
+    "9" = "Endothelial",
     "10" = "PTS2", 
     "11" = "CD_PC", 
     "12" = "LOH", 
-    "13" = "B cell", 
-    "14" = "T cell",
+    "13" = "Dendritic cells", 
+    "14" = "T cells",
     "15" = "Fibroblast", 
     "16.1" = "VSMC",
     "16.2" = "Pericyte",
-    "17" = "Endothelia",
-    "18" = "Endothelia",
-    "19" = "LOH"
+    "17" = "Endothelial",
+    "18" = "",
+    "19" = "Endothelial", 
+    "20" = ""
 )
 cell_annotation
 colData(dev_cell_sce)$cell_type <- cell_annotation[colLabels(dev_cell_sce)]
 dev_cell_sce %>% colData()
 saveRDS(dev_cell_sce, "../data/kidney/kidney-map/dev-cell/dev_cell_sce.rds")
+
+
+library(SingleR)
+dev_pre <- readRDS("../data/kidney/kidney-map/GSE129798/dev_cell_sce.rds")
+pre_label <- SingleR(test = dev_cell_sce, 
+                     ref = dev_pre, 
+                     labels = dev_pre$cell_type)
+
+
 ```
 
 
