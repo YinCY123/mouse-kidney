@@ -9,6 +9,12 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# data to keep in each dataset
+- cell type annotation data
+- mitochondrial percentage data
+- location data
+
+
 # analysis to do with integrated data 
 1. Interactions between sympathetic nerve with epithelial cells
 
