@@ -37,6 +37,7 @@ rownames(drg_cell_barcode_ids) <- drg_cell_barcode_ids$cell_ids
 drg_cell_barcode_ids$cell_type <- drg_cell_barcode_ids$main_cluster
 drg_cell_barcode_ids$cell_type %>% table
 drg_cell_barcode_ids$cell_type <- ifelse(drg_cell_barcode_ids$cell_type == "Vascular Endothelial Cells", "Spinal Endothelial", drg_cell_barcode_ids$cell_type)
+drg_cell_barcode_ids$location <- "Spine"
 
 drg_cell_barcode_list <- split(drg_cell_barcode_ids, f = drg_cell_barcode_ids$library_id)
 
@@ -119,12 +120,16 @@ library(Matrix)
 drg_sce <- SingleCellExperiment(assays = list(counts = as(as.matrix(drg_counts_table), "CsparseMatrix")), 
                                 rowData = gene_df, 
                                 colData = drg_cell_barcode_ids)
-saveRDS(drg_sce, "../data/kidney/kidney-map/GSE175421/drg_sce.rds")
+
+is_mito <- grepl("^mt-", rowData(drg_sce)$symbol)
+is_mito %>% table
+rowData(drg_sce)$symbol[is_mito] %>% sort
+colData(drg_sce)$mito_percent <- round((colSums2(assay(drg_sce[is_mito, ])) / colSums2(assay(drg_sce))) * 100, 4)
+colData(drg_sce)
 ```
 
 
 ```{r}
-drg_sce <- readRDS("../data/kidney-map/GSE175421/drg_sce.rds")
 # remove Fibroblasts, Macrophages, Mural Cells, Satellite Glia, T Cells, Sympathetic Neurons
 drg_sce %>% colData %>% .$cell_type %>% table
 cells_to_remove <- c("Fibroblasts", "Macrophages", "Mural Cells", "T Cells", "Sympathetic Neurons")
@@ -133,13 +138,15 @@ drg_sce <- drg_sce[, !(drg_sce$main_cluster %in% cells_to_remove)]
 # normalization
 library(scuttle)
 library(BiocParallel)
-lib_size <- pooledSizeFactors(counts(drg_sce), clusters = drg_sce$main_cluster)
+set.seed(101)
+lib_size <- pooledSizeFactors(counts(drg_sce), clusters = drg_sce$cell_type)
 lib_size %>% quantile(probs = seq(0, 1, 0.1))
 sizeFactors(drg_sce) <- lib_size
 drg_sce <- logNormCounts(drg_sce)
 
 # model gene variance
 library(scran)
+set.seed(102)
 variance <- modelGeneVar(drg_sce, block = drg_sce$library_id)
 variance[order(variance$bio, decreasing = T), ]
 hvgs <- getTopHVGs(variance, fdr.threshold = 0.01)
@@ -148,26 +155,22 @@ hvgs %>% str
 # dimensional reduction
 library(scater)
 library(PCAtools)
+set.seed(103)
 npcs <- calculatePCA(x = logcounts(drg_sce), subset_row = hvgs)
 elbow <- findElbowPoint(attr(npcs, "percentVar"))
 reducedDim(drg_sce, "PCA") <- npcs[, 1:elbow]
 plot(attr(npcs, "percentVar"))
 
+set.seed(104)
 drg_sce <- runTSNE(drg_sce, dimred = "PCA", perplexity = 20)
+drg_sce %>% colData
 
 source("R/idconv.R")
 plotTSNE(drg_sce, 
-         # colour_by = "main_cluster",
-         colour_by = idconv("Calca"),
+         colour_by = "cell_type",
+         # colour_by = idconv("Calca"),
          point_size = 0.5)
-
-plotExpression(drg_sce, features = idconv("Calca"), 
-               x = "cell_type")
-
 saveRDS(drg_sce, "../data/kidney/kidney-map/GSE175421/drg_sce.rds")
-colData(drg_sce) <- transform(colData(drg_sce), 
-                              mito_percent = percent_mt)
-drg_sce <- readRDS("../data/kidney/kidney-map/GSE175421/drg_sce.rds")
 ```
 
 
@@ -262,6 +265,7 @@ selected_vars <- c("run", "cell_type", "celltype_identifier",
 run_info <- run_info %>% select(selected_vars) %>% 
     rename(cell_ids = "run")
 run_info$cell_type <- ifelse(run_info$cell_type == "sympathetic neuronal cells", "Sympathetic Neurons", run_info$cell_type)
+run_info$location <- "Spine"
 rownames(run_info) <- run_info$cell_ids
 
 feature_counts <- readRDS("../data/kidney/kidney-map/GSE78845/feature_counts.rds")
@@ -291,11 +295,9 @@ sym_sce <- SingleCellExperiment(assays = list(counts = as(mtx, "CsparseMatrix"))
                                 colData = run_info)
 
 sym_sce
-saveRDS(sym_sce, "../data/kidney/kidney-map/GSE78845/sym_sce.rds")
 ```
 
 
-# analysis
 ```{r}
 # quality control
 library(scuttle)
@@ -303,7 +305,7 @@ library(scran)
 library(scater)
 library(magrittr)
 
-sym_sce <- readRDS("../data/kidney/kidney-map/GSE78845/sym_sce.rds")
+set.seed(101)
 feature_stats <- perFeatureQCMetrics(sym_sce)
 filter_index <- feature_stats$mean >= 0.2 & feature_stats$detected >= 5
 sym_sce <- sym_sce[filter_index, ]
@@ -313,22 +315,26 @@ is.mito %>% table
 colData(sym_sce)$mito_percent <- round(colSums(counts(sym_sce)[is.mito, ]) / colSums(counts(sym_sce)), digits = 5) * 100
 sym_sce %>% colData
 
+set.seed(102)
 cell_stats <- perCellQCMetrics(sym_sce, subset = list(mito = is.mito))
 qc <- perCellQCFilters(cell_stats, sub.fields = list('subsets_mito_percent'))
 qc %>% as.data.frame() %>% colSums()
 
 sym_sce <- sym_sce[, !qc$discard]
 
+set.seed(103)
 clusters <- quickCluster(sym_sce, min.size = 20)
 clusters %>% str
 colData(sym_sce)$qclusters <- factor(clusters)
 
 table(colData(sym_sce)$qclusters, colData(sym_sce)$celltype_identifier)
 
+set.seed(104)
 sym_sce <- computePooledFactors(sym_sce, clusters = sym_sce$qclusters)
 sym_sce <- logNormCounts(sym_sce)
 
 # model gene variance
+set.seed(105)
 dec_var <- modelGeneVar(sym_sce, block = sym_sce$sex)
 dec_var[order(dec_var$bio, decreasing = T), ]
 
@@ -336,17 +342,21 @@ hvgs <- getTopHVGs(dec_var, fdr.threshold = 0.01)
 hvgs %>% str
 
 # dimensional reduction
+set.seed(106)
 npcs <- calculatePCA(logcounts(sym_sce), ncomponents = 20, subset_row = hvgs)
 library(PCAtools)
 elbow <- findElbowPoint(attr(npcs, "percentVar"))
 reducedDim(sym_sce, "PCA") <- npcs[, 1:elbow]
 
+set.seed(107)
 sym_sce <- runTSNE(sym_sce, dimred = "PCA", perplexity = 10)
 
 source("R/idconv.R")
 plotTSNE(sym_sce, 
          # colour_by = "qclusters", 
          colour_by = idconv("Dbh"))
+
+sym_sce %>% colData()
 saveRDS(sym_sce, "../data/kidney/kidney-map/GSE78845/sym_sce.rds")
 ```
 

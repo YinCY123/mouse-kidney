@@ -370,8 +370,6 @@ dev_pre <- readRDS("../data/kidney/kidney-map/GSE129798/dev_cell_sce.rds")
 pre_label <- SingleR(test = dev_cell_sce, 
                      ref = dev_pre, 
                      labels = dev_pre$cell_type)
-
-
 ```
 
 

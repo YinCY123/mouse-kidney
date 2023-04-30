@@ -23,9 +23,10 @@ normal <- fread("../data/kidney/kidney-map/GSE146912/Normal_1.txt.gz",
                 sep = "\t", 
                 header = TRUE)
 gene_df <- normal[, 1:2]
-gene_df <- gene_df %>% dplyr::rename(ensembl = IGIS) 
+gene_df <- gene_df %>% dplyr::rename(ensembl = IGIS) %>% as.data.frame()
 rownames(gene_df) <- gene_df$ensembl
-cell_df <- data.frame(cell = colnames(normal)[-c(1,2)])
+cell_df <- data.frame(cell_ids = colnames(normal)[-c(1,2)], 
+                      location = "Cortex")
 rownames(cell_df) <- cell_df$cell
 normal %>% dim
 normal[1:10, 1:5]
@@ -35,12 +36,9 @@ glomer_sce <- SingleCellExperiment(assays = list(counts = as(as.matrix(normal), 
                                    rowData = gene_df, 
                                    colData = cell_df)
 glomer_sce
-saveRDS(glomer_sce, "../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
 ```
 
 ```{r}
-glomer_sce <- readRDS("../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
-
 # quality control
 library(scran)
 library(BiocParallel)
@@ -52,9 +50,10 @@ library(bluster)
 is_mito <- grepl("^mt-", rowData(glomer_sce)$SYMBOL, ignore.case = F)
 is_mito %>% table(useNA = "ifany")
 rowData(glomer_sce)$SYMBOL[is_mito] %>% sort
-colData(glomer_sce)$percent_mito <- round((colSums(assay(glomer_sce[is_mito, ], 1)) / colSums(assay(glomer_sce, 1))) * 100, digits = 3)
+colData(glomer_sce)$mito_percent <- round((colSums(assay(glomer_sce[is_mito, ], 1)) / colSums(assay(glomer_sce, 1))) * 100, digits = 3)
 colData(glomer_sce)
 
+set.seed(101)
 qclusters <- quickCluster(glomer_sce, 
                           min.size = 100, 
                           method = "igraph", 
@@ -74,6 +73,7 @@ glomer_sce <- glomer_sce[, !(qc_stat$low_n_features | qc_stat$low_lib_size | qc$
 
 ```{r}
 # doublet detection
+set.seed(102)
 dbs <- scDblFinder(glomer_sce)
 dbs$scDblFinder.class %>% table
 glomer_sce <- glomer_sce[, dbs$scDblFinder.class == "singlet"]
@@ -83,6 +83,7 @@ glomer_sce
 
 ```{r}
 # normalization
+set.seed(103)
 libsize <- calculateSumFactors(assay(glomer_sce, 1), clusters = glomer_sce$qclusters)
 libsize %>% range
 sizeFactors(glomer_sce) <- libsize
@@ -94,19 +95,20 @@ glomer_sce
 
 ```{r}
 # model gene variance
-glomer_variance2 <- modelGeneVar(glomer_sce)
-glomer_variance2[order(glomer_variance2$bio, decreasing = T), ]
+glomer_variance <- modelGeneVar(glomer_sce)
+glomer_variance[order(glomer_variance$bio, decreasing = T), ]
 
 # feature selection
-hvgs <- getTopHVGs(glomer_variance2, fdr.threshold = 0.01)
+hvgs <- getTopHVGs(glomer_variance, fdr.threshold = 0.001)
 hvgs %>% str
 ```
 
 
 ```{r}
 # dimensionality reduction
+set.seed(104)
 dpcs <- getDenoisedPCs(x = assay(glomer_sce, 2), 
-                       technical = glomer_variance2, 
+                       technical = glomer_variance, 
                        subset.row = hvgs, 
                        BPPARAM = MulticoreParam(12))
 dpcs %>% names
@@ -123,6 +125,8 @@ data.frame(PC = 1:length(percentvar),
     geom_vline(xintercept = elbow, linetype = 2)
 
 reducedDim(glomer_sce, "PCA") <- dpcs$components[, 1:elbow]
+
+set.seed(105)
 glomer_sce <- runTSNE(glomer_sce, use.dimred = "PCA", perplexity = 10)
 
 plotReducedDim(glomer_sce, 
@@ -134,9 +138,10 @@ plotReducedDim(glomer_sce,
 
 ```{r}
 # clustering
-clusters <- clusterRows(reducedDim(glomer_sce, "PCA"), 
-                        BLUSPARAM = NNGraphParam(cluster.fun = "louvain",
-                                                 k = 10, 
+set.seed(106)
+clusters <- clusterRows(reducedDim(glomer_sce, "TSNE"), 
+                        BLUSPARAM = SNNGraphParam(cluster.fun = "louvain", 
+                                                  k = 30,
                                                  BPPARAM = MulticoreParam(10)))
 clusters %>% table
 
@@ -150,51 +155,47 @@ library(patchwork)
 plotReducedDim(glomer_sce, 
                dimred = "TSNE", 
                # colour_by = "percent_mito",
-               colour_by = "label",
+               colour_by = idconv("Gata3"),
                text_by = "label", 
                point_size = 0.4)  
-plotReducedDim(glomer_sce, 
-               dimred = "TSNE", 
-               colour_by = idconv("Pax8"), 
-               text_by = "label", 
-               point_size = 0.4)
-
-plotExpression(glomer_sce, 
-               features = idconv("Pax8"), 
-               x = "label",
-               colour_by = "label")
 ```
 
 ```{r}
 # cell type annotation
-cell_type <- c("1" = "mesangial", 
-               "2" = "parietal epithelial", 
-               "3" = "mesangial",
-               "4" = "afferent/efferent endothelial",
-               "5" = "mesangial", 
-               "6" = "podocyte",
-               "7" = "glomerular endothelial", 
-               "8" = "podocyte", 
-               "9" = "glomerular endothelial", 
-               "10" = "podocyte", 
-               "11" = "podocyte",
-               "12" = "Immune Cells", 
-               "13" = "VSMC", 
-               "14" = "glomerular endothelial")
+cell_type <- c("1" = "Mesangial Cells", 
+               "2" = "Parietal Endothelial", 
+               "3" = "Mesangial Cells",
+               "4" = "Afferent/Efferent Endothelial",
+               "5" = "Mesangial Cells", 
+               "6" = "Podocyte",
+               "7" = "Podocyte", 
+               "8" = "Glomerular Endothelial", 
+               "9" = "Glomerular Endothelial", 
+               "10" = "Podocyte", 
+               "11" = "Immune Cells",
+               "12" = "Glomerular Endothelial", 
+               "13" = "Glomerular Endothelial", 
+               "14" = "Podocyte", 
+               "15" = "Vasculae Smooth Msucle Cells")
 
 glomer_sce$cell_type <- cell_type[glomer_sce$label]
 glomer_sce %>% colData %>% .$cell_type %>% table()
 
 # remove immune cells
 glomer_sce <- glomer_sce[, !(glomer_sce$cell_type == "Immune Cells")]
-saveRDS(glomer_sce, "../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
+glomer_sce %>% colData
 ```
 
 
 ```{r}
 plotTSNE(glomer_sce, 
-         colour_by = idconv("Nphs2"), 
-         text_by = "label", 
-         point_size = 0.5)
+         colour_by = "cell_type", 
+         text_by = "cell_type", 
+         point_size = 0.5, 
+         text_size = 3, 
+         force = 2) +
+    theme(legend.position = "none")
+
+saveRDS(glomer_sce, "../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
 ```
 

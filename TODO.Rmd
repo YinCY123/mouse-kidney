@@ -10,9 +10,10 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # data to keep in each dataset
-- cell type annotation data
-- mitochondrial percentage data
-- location data
+- cell type annotation data: *cell_type*
+- mitochondrial percentage data: *mito_percent*
+- location data: *location*, cortex, outer medulla, inner medulla
+- *cell_ids*
 
 
 # analysis to do with integrated data 
