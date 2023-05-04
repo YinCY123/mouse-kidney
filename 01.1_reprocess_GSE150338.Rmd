@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-
+# prepare download links
 ```{r}
 library(fs)
 library(magrittr)
@@ -23,23 +23,11 @@ write.table(urls, "data/GSE150338_fastq_urls.txt", row.names = F, col.names = F,
 
 
 
+# quality control
 
+# alignment
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# analysis
 
 
 

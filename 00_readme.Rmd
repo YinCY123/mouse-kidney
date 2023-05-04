@@ -11,15 +11,17 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 # data
-1. GSE107585: whole mice kidney single cell sequencing data, 2018 science  
-2. GSE129798: whole mice kidney single cell sequencing data, with regional information, 2019 development cell  
-3. GSE160048: mice and human glomerular sequencing data  
-    candidate: GSE174102, GSE127235, GSE201932
-4. GSE175421: mice sympathetic and sensory nerve sequencing data  
-5. PRJCA003940: embryonic and monocytes derived macrophage bulk sequencing data, for reference  
-6. GSE150338: microdissected mouse tubules sequencing data, for reference  
+- GSE150338: microdissected mouse tubules sequencing data, for inferring tubular single cells in GSE129798 comes from which microdissected location.   
+- GSE129798: whole mice kidney single cell sequencing data, with regional information  
+- GSE146912: mice glomerular sequencing data  
+- GSE175421: mouse sensory neurons from L1-L6  
+- GSE78845: mouse sympathetic neurons from T1-T12  
 
-remove some very few cells from each dataset.
+
+**Notes**  
+> some cells are remove from data set, such as some immune cell in GSE175421 are removed as it has little interest for our integrated dataset. 
+
+
 
 
 

@@ -13,22 +13,34 @@ knitr::opts_chunk$set(echo = TRUE)
 data from GSE150338
 ```{r}
 tubule_region <- data.frame(
-    short_name = c("PTS1", "PTS2", "PTS3", "DTL1", "DTL2", "DTL3", "ATL", 
-                   "MTAL", "CTAL", "DCT", "CNT", "CCD", "OMCD", "IMCD"), 
+    short_name = c("PTS1", "PTS2", "PTS3",
+                   "DTL1", "DTL2", "DTL3",
+                   "ATL", "MTAL", "CTAL",
+                   "DCT", "CNT", "CCD",
+                   "OMCD", "IMCD"), 
     log_name = c("initial segment of the proximal convoluted tubule",
                  "proximal straight tubule in cortical medullary lays", 
                  "last segment of the proximal straight tubule in outer stripe of outer medulla", 
+                 
                  "short descending limb of the loop of Henle", 
                  "long descending limb of the loop of Henle in the outer medulla", 
                  "long descending limb of the loop of Henle in the inner medulla", 
+                 
                  "thin ascending limb of the loop of Henle", 
                  "medullary thick ascending limb of the loop of Henle", 
                  "cortical thick ascending limb of the loop of Henle", 
+                 
                  "distal convoluted tubule", 
                  "connecting tubule", 
                  "cortical collecting duct", 
+                 
                  "outer medullary collecting duct", 
-                 "inner medullary collecting duct")
+                 "inner medullary collecting duct"), 
+    location = c("Cortex", "Cortex", "outer medulla", 
+                 "outer medulla", "outer medulla", "inner medulla", 
+                 "inner medulla", "outer medulla", "Cortex/outer medulla", 
+                 "Cortex", "Cortex", "Cortex", 
+                 "outer medulla", "inner medulla")
 )
 
 tubule_region
@@ -37,23 +49,27 @@ tubule_region
 ```{r}
 library(dplyr)
 library(stringr)
+library(GEOquery)
 
-mouse_tubule <- read.csv("../../git/data/kidney/kidney-map/mouse-tubule/GSE150338_Mouse_TPM_Replicates.csv", 
+mouse_tubule <- read.csv("../data/kidney/kidney-map/GSE150338/GSE150338_Mouse_TPM_Replicates.csv", 
                          sep = "\t")
 mouse_tubule %>% dim
 mouse_tubule %>% tail
 mouse_tubule %>% head
 mouse_tubule %>% colnames()
-mouse_tubule$X %>% table(useNA = "ifany")
 mouse_tubule
 
-# discate glomerila 
+# discard glomerila 
 mouse_tubule <- mouse_tubule %>% select(!matches("_GL_|X"))
 rownames(mouse_tubule) <- mouse_tubule$gene_id
 rowdata <- mouse_tubule[, 1:2]
+rowdata <- rowdata %>% rename(ensembl = gene_id, symbol = Gene_symbol)
 coldata <- data.frame(sample = colnames(mouse_tubule[, -c(1:2)]), 
-                      region = gsub("m[0-9]{0,}_|_[a-z]{0,}", replacement = "", colnames(mouse_tubule[, -c(1:2)])), 
+                      cell_type = gsub("m[0-9]{0,}_|_[a-z]{0,}", replacement = "", colnames(mouse_tubule[, -c(1:2)])), 
                       row.names = colnames(mouse_tubule[, -c(1:2)]))
+
+cell_location <- setNames(tubule_region$location, tubule_region$short_name)
+coldata$location <- cell_location[coldata$cell_type]
 
 ref_mouse_tubule_sce <- SingleCellExperiment(assays = list(tpm = mouse_tubule[, -c(1:2)]), 
                                              rowData = rowdata, 
@@ -61,7 +77,7 @@ ref_mouse_tubule_sce <- SingleCellExperiment(assays = list(tpm = mouse_tubule[, 
 rowData(ref_mouse_tubule_sce)
 
 saveRDS(ref_mouse_tubule_sce, 
-        file = "../../git/data/kidney/kidney-map/mouse-tubule/ref_mouse_tubule_sce.rds")
+        file = "../../git/data/kidney/kidney-map/GSE150338/ref_mouse_tubule_sce.rds")
 ```
 
 
