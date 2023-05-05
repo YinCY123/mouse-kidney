@@ -176,7 +176,7 @@ cell_type <- c("1" = "Mesangial Cells",
                "12" = "Glomerular Endothelial", 
                "13" = "Glomerular Endothelial", 
                "14" = "Podocyte", 
-               "15" = "Vasculae Smooth Msucle Cells")
+               "15" = "VSMC")
 
 glomer_sce$cell_type <- cell_type[glomer_sce$label]
 glomer_sce %>% colData %>% .$cell_type %>% table()

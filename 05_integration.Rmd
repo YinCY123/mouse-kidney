@@ -9,18 +9,15 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
 # Prepare for integration
 ```{r}
-library(harmony)
 library(dplyr)
 
 sym_sce <- readRDS("../data/kidney/kidney-map/GSE78845/sym_sce.rds")
 drg_sce <- readRDS("../data/kidney/kidney-map/GSE175421/drg_sce.rds")
 glomer_sce <- readRDS("../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
 dev_cell_sce <- readRDS("../data/kidney/kidney-map/GSE129798/dev_cell_sce.rds")
-colnames(dev_cell_sce) <- dev_cell_sce$Barcode
-colData(dev_cell_sce) <- transform(colData(dev_cell_sce), 
-                                   cell_type = paste(region, location, cell_type, sep = "_"))
 
 # unify cell names
 sample_meta <- data.frame(
@@ -31,8 +28,14 @@ sample_meta <- data.frame(
                         times = c(dim(drg_sce)[2], dim(sym_sce)[2], 
                                   dim(glomer_sce)[2], dim(dev_cell_sce)[2])), 
     
-    cell_type = c(drg_sce$main_cluster, sym_sce$cell_type, 
-                  glomer_sce$cell_type, dev_cell_sce$cell_type))
+    cell_type = c(drg_sce$cell_type, sym_sce$cell_type, 
+                  glomer_sce$cell_type, dev_cell_sce$cell_type), 
+    
+    mito_percent = c(drg_sce$mito_percent, sym_sce$mito_percent, 
+                                glomer_sce$mito_percent, dev_cell_sce$mito_percent), 
+    
+    location = factor(c(drg_sce$location, sym_sce$location, glomer_sce$location, dev_cell_sce$location), 
+                      levels = c("Cortex", "outer medulla", "inner medulla", "Spine")))
 rownames(sample_meta) <- sample_meta$cell_ids
 sample_meta
 
@@ -59,43 +62,55 @@ sces
 library(scran)
 library(scater)
 library(batchelor)
+library(harmony)
 
+set.seed(101)
 sces <- multiBatchNorm(sces, batch = sces$geo_accession, normalize.all = TRUE)
 
 vars <- modelGeneVar(sces, block = sces$geo_accession)
-hvgs <- getTopHVGs(vars, n = 2000)
+hvgs <- getTopHVGs(vars, n = 5000)
 hvgs %>% str
 
-
+set.seed(102)
 npcs <- calculatePCA(sces, subset_row = hvgs)
 library(PCAtools)
 elbow <- findElbowPoint(attr(npcs, "percentVar"))
-reducedDim(sces, "PCA") <- npcs[, 1:20]
+reducedDim(sces, "PCA") <- npcs[, 1:40]
 
+set.seed(103)
 sces <- RunHarmony(object = sces, 
                    group.by.vars = "geo_accession", 
-                   reduction.save = "harmony")
+                   reduction.save = "harmony", 
+                   epsilon.harmony = 1e-06)
 
+set.seed(104)
 sces <- runTSNE(sces, dimred = "harmony")
-sces <- runUMAP(sces, dimred = "harmony")
-# sces <- readRDS("../data/kidney/kidney-map/sces_harmony.rds")
-colData(sces) <- transform(colData(sces), 
-                           region = regmatches())
 
+# set.seed(105)
+# sces <- runUMAP(sces, dimred = "harmony")
+
+
+library(viridis)
 plotTSNE(sces, 
-         colour_by = "cell_type", 
-         point_size = 0.5, 
+         colour_by = "geo_accession", 
+         point_size = 0.05, 
          text_by = "cell_type", 
-         text_size = 2) +
-    theme(legend.position = "none")
+         text_size = 1.5) +
+    scale_color_viridis(discrete = TRUE) +
+    guides(size = guide_legend(override.aes = list(point_size = 3)))
 
-ggsave("harmony_test.pdf")
+
+ggsave("harmony_TSNE_cell_type.pdf")
+ggsave("harmony_TSNE_location.pdf")
+ggsave("harmony_TSNE_datasets.pdf")
+
+sces <- readRDS("../data/kidney/kidney-map/harmonized_sce.rds")
 saveRDS(sces, "../data/kidney/kidney-map/harmonized_sce.rds")
 ```
 
 
+
 # Integration with RISC
-## Prepare for integration
 ```{r}
 library(SingleCellExperiment)
 library(batchelor)
