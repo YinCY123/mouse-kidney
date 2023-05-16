@@ -6,7 +6,7 @@ createRISC <- function(sce_list, ...){
                           cell = colData(sce_list[[i]]), 
                           gene = rowData(sce_list[[i]]), 
                           is.filter = F)
-        current@assay$logcounts <- logcounts(sce_list[[i]])
+        # current@assay$logcounts <- logcounts(sce_list[[i]])
         sce_list[[i]] <- current
     }
     return(sce_list)

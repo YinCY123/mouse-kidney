@@ -10,16 +10,20 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-# Prepare for integration
+# Integration with harmony
 ```{r}
 library(dplyr)
+library(scran)
+library(scater)
+library(batchelor)
+library(harmony)
 
 sym_sce <- readRDS("../data/kidney/kidney-map/GSE78845/sym_sce.rds")
 drg_sce <- readRDS("../data/kidney/kidney-map/GSE175421/drg_sce.rds")
 glomer_sce <- readRDS("../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
 dev_cell_sce <- readRDS("../data/kidney/kidney-map/GSE129798/dev_cell_sce.rds")
 
-# unify cell names
+
 sample_meta <- data.frame(
     cell_ids = c(colnames(drg_sce), colnames(sym_sce), 
                  colnames(glomer_sce), colnames(dev_cell_sce)),
@@ -57,13 +61,8 @@ sces
 ```
 
 
-# Integration with harmony
-```{r}
-library(scran)
-library(scater)
-library(batchelor)
-library(harmony)
 
+```{r}
 set.seed(101)
 sces <- multiBatchNorm(sces, batch = sces$geo_accession, normalize.all = TRUE)
 
@@ -97,15 +96,15 @@ plotTSNE(sces,
          text_by = "cell_type", 
          text_size = 1.5) +
     scale_color_viridis(discrete = TRUE) +
-    guides(size = guide_legend(override.aes = list(point_size = 3)))
+    theme(legend.position = "none")
+    guides(size = guide_legend(override.aes = list(size = 3)))
 
 
-ggsave("harmony_TSNE_cell_type.pdf")
-ggsave("harmony_TSNE_location.pdf")
-ggsave("harmony_TSNE_datasets.pdf")
+ggsave("figures/harmony_TSNE_cell_type.pdf")
+ggsave("figures/harmony_TSNE_location.pdf")
+ggsave("figures/harmony_TSNE_datasets.pdf")
 
-sces <- readRDS("../data/kidney/kidney-map/harmonized_sce.rds")
-saveRDS(sces, "../data/kidney/kidney-map/harmonized_sce.rds")
+saveRDS(sces, "../data/kidney/kidney-map/integrated_data/harmonized_integrated.rds")
 ```
 
 
@@ -113,112 +112,210 @@ saveRDS(sces, "../data/kidney/kidney-map/harmonized_sce.rds")
 # Integration with RISC
 ```{r}
 library(SingleCellExperiment)
-library(batchelor)
-library(magrittr)
 library(RISC)
+library(magrittr)
+
+sym_sce <- readRDS("../data/kidney/kidney-map/GSE78845/sym_sce.rds")
+drg_sce <- readRDS("../data/kidney/kidney-map/GSE175421/drg_sce.rds")
+glomer_sce <- readRDS("../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
+dev_cell_sce <- readRDS("../data/kidney/kidney-map/GSE129798/dev_cell_sce.rds")
+
+
+sces <- list(dev_cell = dev_cell_sce, drg = drg_sce, glomer = glomer_sce, sym = sym_sce)
+source("R/harmoniseSCE.R")
+sces <- harmonizeSCE(sces, method = "RISC")
+
+# library(batchelor)
+# set.seed(101)
+# sces <- multiBatchNorm(sces[[1]], sces[[2]], sces[[3]], sces[[4]])
+
+source("R/createRISC.R")
+sces <- createRISC(sce_list = sces)
+
+rm(dev_cell_sce, drg_sce, sym_sce, glomer_sce)
+gc()
+```
+
+
+```{r}
+pro <- function(x, ...){
+        # do not filtering, is been done
+        x <- scFilter(x,min.UMI = 0, max.UMI = Inf, min.gene = 0, 
+                      min.cell = 0, mitochon = 1, is.filter = FALSE)
+        
+        # normalize the raw counts
+        x <- scNormalize(x, ncore = 3)
+        
+        # find high variable genes
+        x <- scDisperse(x)
+    return(x)
+}
+
+
+set.seed(101)
+sces <- lapply(sces, pro)
+gc()
+
+var_genes <- Reduce(union, lapply(sces, function(x){x@vargene})) %>% unique()
+var_genes %>% str
+
+scMultiIntegrate(objects = sces, 
+                 eigens = 30, 
+                 var.gene = var_genes, 
+                 align = "OLS", 
+                 npc = 50, 
+                 ncore = 3, 
+                 seed = 102)
+sces <- .Last.value
+gc()
+
+set.seed(103)
+sces <- scTSNE(sces, npc = 50, use = "PLS", perplexity = 30)
+
+saveRDS(sces, "../data/kidney/kidney-map/integrated_data/RISC_integrated.rds")
+
+
+library(ggplot2)
+DimPlot(sces, 
+        slot = "cell.tsne", 
+        colFactor = "mito_percent", 
+        label = TRUE, 
+        label.font = 2, 
+        adjust.label = 0) +
+    theme(legend.position = "none")
+
+
+
+ggsave("figures/RISC_TSNE_cell_type.pdf")
+```
+
+
+
+# Integration with fastMNN
+```{r}
+library(SingleCellExperiment)
+library(scran)
+library(batchelor)
 
 
 sym_sce <- readRDS("../data/kidney/kidney-map/GSE78845/sym_sce.rds")
 drg_sce <- readRDS("../data/kidney/kidney-map/GSE175421/drg_sce.rds")
 glomer_sce <- readRDS("../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
 dev_cell_sce <- readRDS("../data/kidney/kidney-map/GSE129798/dev_cell_sce.rds")
-colnames(dev_cell_sce) <- dev_cell_sce$Barcode
-colData(dev_cell_sce)$cell_ids <- colData(dev_cell_sce)$Barcode 
-colData(dev_cell_sce)$Barcode <- NULL
-colData(dev_cell_sce) <- transform(colData(dev_cell_sce), 
-                                   region = sapply(region, FUN = function(x){
-                                       switch(x, 
-                                              "Z1" = "cortex", 
-                                              "Z2" = "outer medulla", 
-                                              "Z3" = "inner medulla")
-                                          }))
-colData(dev_cell_sce) <- transform(colData(dev_cell_sce), 
-                                   cell_type = ifelse(nchar(location) == 0, 
-                                                        paste(region, cell_type, sep = "_"), paste(location, cell_type, sep = "_")))
 
-sces <- list(dev_cell = dev_cell_sce, drg = drg_sce, glomer = glomer_sce, sym = sym_sce)
+sces <- list(dev_cell = dev_cell_sce, 
+             glomer = glomer_sce, 
+             sym = sym_sce,
+             drg = drg_sce)
+
 source("R/harmoniseSCE.R")
-sces <- harmonizeSCE(sces, method = "RISC")
+sces <- harmonizeSCE(sces, method = "fastMNN")
 
-library(batchelor)
+set.seed(101)
 sces <- multiBatchNorm(sces[[1]], sces[[2]], sces[[3]], sces[[4]])
 
-source("R/createRISC.R")
-sces <- createRISC(sce_list = sces)
+set.seed(102)
+dec_list <- lapply(sces, modelGeneVar)
+combined_dec <- combineVar(dec_list[[1]], dec_list[[2]], dec_list[[3]], dec_list[[4]])
+hvgs <- getTopHVGs(combined_dec, n = 3000)
+hvgs %>% str
 
-# skip filtering and normalization
-pro <- function(x, ...){
-    x@metadata$filter <- data.frame(min.UMI = 0, 
-                                    max.UMI = Inf, 
-                                    min.gene = 0, 
-                                    min.cell = 0)
-    x@metadata$normalise <- "MultibatchNorm"
-    
-    return(x)
-}
+rm(dev_cell_sce, glomer_sce, drg_sce, sym_sce)
+gc()
+```
 
-sces <- lapply(sces, pro)
 
-preprocess <- function(x, ...){
-    x <- scDisperse(x)
-    
-    # replace highly variable gene with all gene for integration
-    # x@vargene <- rownames(x@rowdata)
-    
-    return(x)
-}
-
-sces <- lapply(sces, preprocess)
-
-# var_genes <- Reduce(union, lapply(sces, function(x){x@vargene})) %>% unique()
-var_genes <- rownames(sces[[1]]@assay$logcounts)
-var_genes %>% str
-
-scMultiIntegrate(objects = sces, 
-                 eigens = 30, 
-                 var.gene = var_genes, 
-                 align = "Predict", 
-                 npc = 50, 
-                 ncore = 10, 
-                 seed = 123)
-sces_RISC <- .Last.value
-sces_RISC <- scTSNE(sces_RISC, npc = 50, use = "PLS", perplexity = 10)
-
-cord <- sces_RISC@DimReduction$cell.tsne
-cols <- sces_RISC@coldata
+```{r}
+library(scater)
 library(dplyr)
-df <- left_join(cols, as.data.frame(cord) %>% tibble::rownames_to_column("Barcode"))
-df %>% head
 
+set.seed(103)
+combined_sces <- correctExperiments(sces[[1]], sces[[2]], sces[[3]], sces[[4]], 
+                                    include.rowdata = TRUE, 
+                                    PARAM = FastMnnParam())
+
+set.seed(104)
+combined_sces <- runPCA(combined_sces, subset_row = hvgs)
+combined_sces <- runTSNE(combined_sces, dimred = "PCA", perplexity = 30)
+saveRDS(combined_sces, "../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+```
+
+
+```{r}
 library(ggplot2)
-library(stringr)
+library(scater)
+library(ggrepel)
 
-location <- df %>% 
-    mutate(cell = ifelse(str_detect(cell_type, "_"),  str_replace(cell_type, "^[a-z ]{0,}_", ""), cell_type)) %>% 
-    group_by(cell) %>% 
-    mutate(x = median(tSNE1), 
-           y = median(tSNE2)) %>% 
-    distinct(x, y, .keep_all = TRUE)
+cell_location <- colData(combined_sces) %>% as.data.frame() %>% cbind(reducedDim(combined_sces, 3)) %>% 
+    group_by(cell_type) %>% 
+    summarise(x = median(TSNE1), 
+              y = median(TSNE2))
 
-# locations to remove
-l <- c("PTS1_PTS2", "PTS1_PTS3", "PTS2_PTS1","PTS2_PTS3", "PTS3_PTS1", "PTS3_PTS2", 
-       "MTAL_PTS2", "CTAL_PTS2", "DCT_PTS2", "DTL1_PTS1", "DTL2_PTS2", "DTL1_PTS2")
-location <- location %>% 
-    filter(!(cell %in% l))
+combined_sces$location <- factor(combined_sces$location, levels = c("Cortex", "outer medulla", "inner medulla", "Spine"))
 
-df %>% 
-    mutate(cell = ifelse(str_detect(cell_type, "_"),  str_replace(cell_type, "^[a-z ]{0,}_", ""), cell_type)) %>% 
-    ggplot(aes(tSNE1, tSNE2)) +
-    geom_point(aes(color = cell), size = 0.5, alpha = 1/3) +
-    geom_text(data = location, aes(x, y, label = cell), size = 2) +
+ggcells(combined_sces, aes(TSNE.1, TSNE.2)) +
+    geom_point(aes(colour = cell_type), size = 0.5, alpha = 1/3, show.legend = T) +
+    geom_text_repel(data = cell_location, aes(x, y, label = cell_type), size = 2.5) +
+    viridis::scale_color_viridis(discrete = T) +
+    theme_classic() +
     theme(legend.position = "none")
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size = 3)))
 
-ggsave("RISC_test.pdf")
+ggsave("figures/fastMNN_cell_type.pdf")
 ```
 
 
 
-# Integration with fastMNN
+# Integration with Seurat
+```{r}
+library(Seurat)
+library(magrittr)
+library(ggplot2)
+
+sym_sce <- readRDS("../data/kidney/kidney-map/GSE78845/sym_sce.rds")
+drg_sce <- readRDS("../data/kidney/kidney-map/GSE175421/drg_sce.rds")
+glomer_sce <- readRDS("../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
+dev_cell_sce <- readRDS("../data/kidney/kidney-map/GSE129798/dev_cell_sce.rds")
+
+
+kidney_list <- list(dev_cell = dev_cell_sce, 
+                    glomer = glomer_sce, 
+                    drg = drg_sce, 
+                    sym = sym_sce)
+
+# remove unused files to save space
+rm(sym_sce, drg_sce, glomer_sce, dev_cell_sce)
+gc()
+
+kidney_list <- lapply(kidney_list, FUN = as.Seurat)
+
+kidney_list <- lapply(kidney_list, 
+                      FUN = SCTransform, 
+                      seed.use = 101, 
+                      variable.features.n = 5000, 
+                      assay = "originalexp",
+                      vars.to.regress = "mito_percent")
+
+features <- SelectIntegrationFeatures(kidney_list, nfeatures = 5000)
+features %>% str
+
+kidney_list <- PrepSCTIntegration(kidney_list, anchor.features = features)
+anchors <- FindIntegrationAnchors(kidney_list, normalization.method = "SCT", anchor.features = features)
+rm(kidney_list);gc()
+
+kidney_integrated <- IntegrateData(anchorset = anchors, normalization.method = "SCT")
+```
+
+
+```{r}
+rm(anchors);gc()
+
+set.seed(102)
+kidney_integrated <- RunPCA(kidney_integrated, verbose = TRUE) %>% 
+    RunTSNE(reduction = "pca", dims = 1:50)
+
+saveRDS(kidney_integrated, "../data/kidney/kidney-map/integrated_data/Seurat_integrated.rds")
+```
 
 
 

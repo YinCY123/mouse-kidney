@@ -107,11 +107,7 @@ dev_cell_sce
 
 ```{r}
 # feature selection
-library(magrittr)
 library(stringr)
-library(scuttle)
-library(scran)
-library(scater)
 library(BiocParallel)
 
 dec_dev_cell <- modelGeneVar(dev_cell_sce, block = colData(dev_cell_sce)$batch)
@@ -174,11 +170,8 @@ plotTSNE(dev_cell_sce,
 
 ```{r}
 # graph based clustering
-library(scran)
-library(igraph)
-library(scater)
-library(BiocParallel)
 library(bluster)
+library(patchwork)
 
 set.seed(104)
 clusters <- clusterRows(reducedDim(dev_cell_sce, "PCA"), 
@@ -189,39 +182,24 @@ colData(dev_cell_sce)$clusters <- factor(clusters)
 colData(dev_cell_sce)
 
 source("R/idconv.R")
-library(patchwork)
 plotTSNE(dev_cell_sce, 
-         # colour_by = idconv("C1qa"), 
-         colour_by = "mito_percent",
+         # colour_by = idconv("Corin"),
+         colour_by = "location",
          point_size = 0.5, 
          text_by = "clusters") +
   theme(legend.position = "none") +
-
 plotTSNE(dev_cell_sce, 
-         # colour_by = idconv("C1qa"), 
-         colour_by = "location",
+         colour_by = idconv("Cdh13"),
+         # colour_by = "clusters",
          point_size = 0.5, 
-         text_by = "clusters")
-```
-
-
-```{r}
-# highlight each cluster and sub-cluster
-for( n in levels(colData(dev_cell_sce)$clusters)){
-    my_color <- rep("grey", length(colData(dev_cell_sce)$clusters))
-    names(my_color) <- as.character(colData(dev_cell_sce)$clusters)
-    my_color[colData(dev_cell_sce)$clusters == n] <- "red"
-    
-    plotReducedDim(object = dev_cell_sce, 
-                   dimred = "TSNE", 
-                   colour_by = "clusters", 
-                   text_by = "clusters", 
-                   point_size = 0.2) +
-        scale_color_manual(values = my_color) +
-        guides(colour = guide_legend(override.aes = list(size = 2)))
-    
-    ggsave(paste0("dev_image/the-", n, "th-cluster.pdf"))
-}
+         text_by = "clusters") +
+  theme(legend.position = "none") 
+plotTSNE(dev_cell_sce, 
+         colour_by = idconv("Pxylp1"),
+         # colour_by = "clusters",
+         point_size = 0.5, 
+         text_by = "clusters") +
+  theme(legend.position = "none")
 ```
 
 
@@ -231,100 +209,54 @@ library(scDblFinder)
 set.seed(105)
 dbs <- findDoubletClusters(dev_cell_sce, clusters = colData(dev_cell_sce)$clusters)
 dbs %>% as.data.frame() %>% dplyr::arrange(median.de)
-# doublets <- c(23, 25, 30, 31, 32, 33, 35, 36, 38, 39, 40, 41)
+# doublets <- c(25, 30, 31, 32, 33, 35, 36, 38, 39, 40, 41)
 ```
 
-
-```{r}
-# marker gene detection
-fmarkers <- findMarkers(dev_cell_sce, 
-                        groups = dev_cell_sce$clusters, 
-                        test.type = "wilcox", 
-                        pval.type = "all", 
-                        direction = "up", 
-                        min.prop = 0.25)
-fmarkers[["30"]] %>% 
-    as.data.frame() %>% 
-    dplyr::arrange(FDR) %>% 
-    head(50) %>% 
-    rownames() %>% 
-    idconv(from_type = "GENEID", to_type = "SYMBOL")
-```
-
-
-
-```{r}
-# cell type annotation base on marker genes
-markers <- list(
-    endothelia = c("Cdh5", "Pecam1", "Kdr", "Nrp1"), 
-    macrophage = c("C1qa", "C1qb", "C1qc", "Cx3cr1", "Lyz2"), 
-    T_cell = c("Thy1", "Cd3g", "Cd3d"), 
-    B_cell = c("Cd79a", "Cd79b"),
-    NK = c("Tyrobp"), 
-    DC = c("H2-Eb1", "H2-Ab1"),
-    Monocytes = c("Csf1r"),
-    VSMC = c("Cnn1"), 
-    pericyte = c("Cspg4"), 
-    Fibroblast = c("Dcn"), 
-    PTS1 = c("Slc5a2", "Slc5a12", "Slc7a7", "Spp2", "Slc6a19", "Slc22a29"),
-    PTS2 = c("Fxyd2", "Hrsp12"), 
-    PTS3 = c("Atp11a", "Slc13a3", "Slc27a2"),
-    CD_IC = c("Atp6v1g3", "Slc4a1", "Aqp6", "Slc26a4", "Hmx2"),
-    CD_PC = c("Hsd11b2", "Aqp4", "Aqp2"),
-    DCT = c("Pvalb", "Slc12a3"),
-    LOH = c("Clcnka", "Slc12a1", "Umod", "Sptssb")
-)
-
-cell_annotation <- c(
-    "1" = "LOH",
-    "2" = "CD_PC", 
-    "3" = "LOH",
-    "4" = "Monocytes",
-    "5" = "Macrophages",
-    "6" = "PTS3", 
-    "7" = "LOH",
-    "8.1" = "VSMC",
-    "8.2" = "Pericytes",
-    "9" = "Endothelial",
-    "10" = "PTS2", 
-    "11" = "Dendritic Cells", 
-    "12" = "T Cells", 
-    "13" = "DCT", 
-    "14" = "CD_PC",
-    "15" = "Monocytes", 
-    "16" = "Endothelial",
-    "17" = "CD_IC",
-    "18" = "PTS1",
-    "19" = "CD_PC", 
-    "20" = "Fibroblast",
-    "21" = "PTS2", 
-    "22" = "CD_PC", 
-    "23" = "doublets", 
-    "24" = "B Cells", 
-    "25" = "doublets", 
-    "26" = "DCT", 
-    "27" = "Endothelial", 
-    "28" = "DCT", 
-    "29" = "CD_IC", 
-    "30" = "doublets",
-    "31" = "doublets", 
-    "32" = "doublets", 
-    "33" = "doublets", 
-    "34" = "CD_PC", 
-    "35" = "doublets", 
-    "36" = "doublets", 
-    "37" = "Monocytes", 
-    "38" = "doublets", 
-    "39" = "doublets", 
-    "40" = "doublets", 
-    "41" = "doublets"
-)
-```
 
 
 # sub-clusters
 ```{r}
-# 8
+# 1 MTAL CTAL
+c1 <- dev_cell_sce[, dev_cell_sce$clusters == 1]
+
+hvgs_mtal <- readxl::read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                                sheet = "MTAL_1020") %>% 
+    dplyr::filter(FDR < 0.05) %>% 
+    dplyr::pull(Gene_id) 
+
+hvgs_ctal <- readxl::read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                                sheet = "CTAL_1092") %>% 
+    dplyr::filter(FDR < 0.05) %>% 
+    dplyr::pull(Gene_id)
+
+hvgs <- c(hvgs_ctal, hvgs_mtal) %>% unique()
+hvgs <- hvgs[hvgs %in% rownames(c1)]
+
+set.seed(101)
+c1 <- runPCA(c1, subset_row = hvgs)
+
+set.seed(102)
+c1 <- runTSNE(c1, dimred = "PCA", perplexity = 50)
+
+set.seed(103)
+clusters_c1 <- clusterRows(reducedDim(c1, "PCA"), 
+                           BLUSPARAM = NNGraphParam(k = 20))
+clusters_c1 %>% table
+colLabels(c1) <- clusters_c1
+# 1.1 LOH_CTAL, 1.2 LOH_MTAL
+colLabels(c1) <- paste("1.", colLabels(c1), sep = "")
+labels <- as.character(dev_cell_sce$clusters)
+labels[labels == "1"] <- colLabels(c1)
+dev_cell_sce$clusters <- labels
+
+plotTSNE(c1, 
+         # colour_by = idconv("Shd"),
+         colour_by = "label")
+```
+
+
+```{r}
+# 8 VSMC, Pericytes
 c8 <- dev_cell_sce[, dev_cell_sce$clusters == 8]
 hvgs <- c("ENSMUSG00000024620", "ENSMUSG00000032911", "ENSMUSG00000001349")
 
@@ -351,10 +283,13 @@ colLabels(c8) <- sapply(clusters_c8, FUN = function(x){
          "5" = "2", 
          "6" = "2")
 })
+# 8.1 VSMC 8.2 Pericytes
 colLabels(c8) <- paste("8.", colLabels(c8), sep = "")
 labels <- as.character(dev_cell_sce$clusters)
 labels[labels == "8"] <- colLabels(c8)
 dev_cell_sce$clusters <- labels
+
+source("R/idconv.R")
 plotReducedDim(c8, dimred = "TSNE", 
                colour_by = idconv("Cnn1"), 
                text_by = "label")
@@ -362,10 +297,270 @@ plotReducedDim(c8, dimred = "TSNE",
 
 
 ```{r}
+# 7 ATL, DTL3
+c7 <- dev_cell_sce[, grep("^7", dev_cell_sce$clusters)]
+idconv("Osr2")
+hvgs <- c("ENSMUSG00000004655", "ENSMUSG00000043461", "ENSMUSG00000022330")
+dev_cell_hvgs <- getTopHVGs(stats = dec_dev_cell, 
+                            var.field = "bio",
+                            var.threshold = 0, 
+                            fdr.threshold = 0.01)
+dev_cell_hvgs %>% str
+
+
+set.seed(106)
+c7 <- runPCA(c7, exprs_values = "logcounts", 
+             ncomponents = 10, 
+             subset_row = hvgs)
+
+set.seed(107)
+c7 <- runTSNE(c7, perplexity = 30, dimred = "PCA")
+
+set.seed(108)
+clusters_c7 <- clusterRows(reducedDim(c7, "PCA"), 
+                           BLUSPARAM = NNGraphParam(k = 30))
+clusters_c7 %>% table
+colLabels(c7) <- clusters_c7
+
+# 1: ATL
+# 2: DTL3
+colLabels(c7) <- sapply(clusters_c7, FUN = function(x){
+  switch(as.character(x), 
+         "1" = "1",
+         "2" = "2", 
+         "3" = "1", 
+         "4" = "1", 
+         "5" = "1", 
+         "6" = "1", 
+         "7" = "1", 
+         "8" = "2", 
+         "9" = "1")
+})
+
+colLabels(c7) <- paste("7.", colLabels(c7), sep = "")
+labels <- as.character(dev_cell_sce$clusters)
+labels[grep("^7", labels)] <- colLabels(c7)
+dev_cell_sce$clusters <- labels
+
+
+plotTSNE(c7, 
+         colour_by = "label",
+         # colour_by = idconv("Sptssb"),
+         text_by = "label")
+```
+
+
+```{r}
+# 12 Cd4T, Cd8T,NK
+c12 <- dev_cell_sce[, dev_cell_sce$clusters == 12]
+hvgs <- c("ENSMUSG00000032094", "ENSMUSG00000002033", 
+          "ENSMUSG00000030579", "ENSMUSG00000023274", 
+          "ENSMUSG00000053977", "ENSMUSG00000053044")
+
+set.seed(101)
+c12 <- runPCA(c12, 
+              subset_row = hvgs, 
+              ncomponents = 4)
+
+set.seed(102)
+c12 <- runTSNE(c12, dimred = "PCA", preplexity = 30)
+
+set.seed(103)
+c12_clusters <- clusterRows(reducedDim(c12, "PCA"), 
+                            BLUSPARAM = NNGraphParam(k = 50))
+c12_clusters %>% table
+colLabels(c12) <- c12_clusters
+
+colLabels(c12) <- sapply(c12_clusters, FUN = function(x){
+  switch(as.character(x), 
+         "1" = "1",
+         "2" = "3", 
+         "3" = "1", 
+         "4" = "1", 
+         "5" = "2", 
+         "6" = "1")
+})
+# 1,3,4,6: Cd4 T cells
+# 5: Cd8 T cells
+# 2: NK cells
+
+colLabels(c12) <- paste("12.",colLabels(c12), sep = "") 
+
+labels <- as.character(dev_cell_sce$clusters)
+labels[labels == "12"] <- colLabels(c12)
+dev_cell_sce$clusters <- labels
+
+library(patchwork)
+plotTSNE(c12, 
+         colour_by = idconv("Cd8a"),
+         # colour_by = "label",
+         text_by = "label") +
+plotTSNE(c12, 
+         colour_by = idconv("Cd4"),
+         # colour_by = "label",
+         text_by = "label")
+```
+
+
+```{r}
+# 17, 29: CCD_IC, OMCD_IC, IMCD_IC
+cs <- dev_cell_sce[, dev_cell_sce$clusters %in% c(17, 29)]
+hvgs_ccd <- readxl::read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                               sheet = "CCD_797") %>% 
+    dplyr::filter(FDR < 0.05) %>% 
+    dplyr::pull(Gene_id)
+
+hvgs_omcd <- readxl::read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                                sheet = "OMCD_757") %>% 
+    dplyr::filter(FDR < 0.05) %>% 
+    dplyr::pull(Gene_id)
+
+hvgs_imcd <- readxl::read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                                sheet = "IMCD_1951") %>% 
+    dplyr::filter(FDR < 0.05) %>% 
+    dplyr::pull(Gene_id)
+
+hvgs <- c(hvgs_ccd, hvgs_imcd, hvgs_omcd) %>% unique()
+hvgs <- hvgs[hvgs %in% rownames(cs)]
+
+set.seed(101)
+cs <- runPCA(cs, exprs_values = "logcounts", 
+             ncomponents = 10, 
+             subset_row = hvgs)
+
+set.seed(102)
+cs <- runTSNE(cs, perplexity = 30, dimred = "PCA")
+
+set.seed(103)
+clusters_cs <- clusterRows(reducedDim(cs, "PCA"), 
+                           BLUSPARAM = NNGraphParam(k = 35))
+clusters_cs %>% table
+colLabels(cs) <- clusters_cs
+
+# 1: IMCD_IC, 2: CCD_IC, 3: OMCD_IC
+colLabels(cs) <- paste("17_29.", colLabels(cs), sep = "") 
+labels <- as.character(dev_cell_sce$clusters)
+labels[labels %in% c(17, 29)] <- colLabels(cs)
+dev_cell_sce$clusters <- labels
+
+
+plotTSNE(cs, 
+         # colour_by = "label", 
+         colour_by = idconv("Fxyd2"),
+         text_by = "label")
+```
+
+
+```{r}
+# cell type annotation base on marker genes
+markers <- list(
+    endothelia = c("Cdh5", "Pecam1", "Kdr", "Nrp1"), 
+    macrophage = c("C1qa", "C1qb", "C1qc", "Cx3cr1", "Lyz2"), 
+    T_cell = c("Thy1", "Cd3g", "Cd3d"), 
+    B_cell = c("Cd79a", "Cd79b"),
+    NK = c("Tyrobp"), 
+    DC = c("H2-Eb1", "H2-Ab1"),
+    Monocytes = c("Csf1r"),
+    VSMC = c("Cnn1"), 
+    pericyte = c("Cspg4"), 
+    Fibroblast = c("Dcn"), 
+    PTS1 = c("Slc5a2", "Slc5a12", "Slc7a7", "Spp2", "Slc6a19", "Slc22a29"),
+    PTS2 = c("Fxyd2", "Hrsp12"), 
+    PTS3 = c("Atp11a", "Slc13a3", "Slc27a2"),
+    CD_IC = c("Atp6v1g3", "Slc4a1", "Aqp6", "Slc26a4", "Hmx2"),
+    CD_PC = c("Hsd11b2", "Aqp4", "Aqp2"),
+    DCT = c("Pvalb", "Slc12a3"),
+    LOH = c("Clcnka", "Slc12a1", "Umod", "Sptssb"), 
+    LOH_DTL1 = c("Lbp"), 
+    LOH_DTL2 = c("Aqp1", "Slc39a8", "Tspan6", "Nr2e3"), 
+    LOH_DTL3 = c("Aqp1, Osr2"), 
+    LOH_ATL = c("Sptssb"),
+    LOH_MTAL = c("Clcnka", "Umod", "Slc12a1", "Pcsk6", "Tmem207", "Kcnt1"),
+    LOH_CTAL = c("Shd", "Dusp9", "Rab6b", "Rps6ka6", "Fgf9"),
+    CNT = c("Kcne1", "S100g"), 
+    CCD = c("Calb1", "Slc4a1", "Pth1r", "Hmx2", "Insrr"),
+    OMCD = c("Aqp2", "Aqp4", "Hsd11b2", "Slc4a1", "Slc26a7"), 
+    IMCD = c("Wnt4", "Aqp2", "Aqp4")
+)
+
+
+cell_annotation <- c(
+    "1.1" = "LOH_CTAL",
+    "1.2" = "LOH_MTAL",
+    "2" = "IMCD_PC", 
+    "3" = "LOH_DTL2",
+    "4" = "Monocytes",
+    "5" = "Macrophages",
+    "6" = "PTS2", 
+    "7.1" = "LOH_ATL",
+    "7.2" = "LOH_DTL3",
+    "8.1" = "VSMC",
+    "8.2" = "Pericytes",
+    "9" = "Endothelial",
+    "10" = "PTS3", 
+    "11" = "Dendritic Cells", 
+    "12.1" = "Cd4 T Cells", 
+    "12.2" = "Cd8 T Cells",
+    "12.3" = "NK Cells",
+    "13" = "DCT", 
+    "14" = "OMCD_PC",
+    "15" = "Monocytes", 
+    "16" = "Endothelial",
+    "17_29.1" = "IMCD_IC",
+    "17_29.2" = "CCD_IC",
+    "17_29.3" = "OMCD_IC",
+    "18" = "PTS1",
+    "19" = "IMCD_PC", 
+    "20" = "Fibroblast",
+    "21" = "PTS1", 
+    "22" = "CCD_PC", 
+    "23" = "LOH_DTL1", 
+    "24" = "B Cells", 
+    "25" = "doublets", 
+    "26" = "DCT", 
+    "27" = "Endothelial", 
+    "28" = "DCT", 
+    "30" = "doublets",
+    "31" = "doublets", 
+    "32" = "doublets", 
+    "33" = "doublets", 
+    "34" = "CNT", 
+    "35" = "doublets", 
+    "36" = "doublets", 
+    "37" = "Monocytes", 
+    "38" = "doublets", 
+    "39" = "doublets", 
+    "40" = "doublets", 
+    "41" = "doublets"
+)
+```
+
+
+```{r}
+# highlight each cluster and sub-cluster
+for( n in unique(colData(dev_cell_sce)$clusters)){
+    my_color <- rep("grey", length(colData(dev_cell_sce)$clusters))
+    names(my_color) <- as.character(colData(dev_cell_sce)$clusters)
+    my_color[colData(dev_cell_sce)$clusters == n] <- "red"
+    
+    plotReducedDim(object = dev_cell_sce, 
+                   dimred = "TSNE", 
+                   colour_by = "clusters", 
+                   text_by = "clusters", 
+                   point_size = 0.2) +
+        scale_color_manual(values = my_color) +
+        guides(colour = guide_legend(override.aes = list(size = 2)))
+    
+    ggsave(paste0("dev_image/the-", n, "th-cluster.pdf"))
+}
+```
+
+
+
+```{r}
 colData(dev_cell_sce)$cell_type <- cell_annotation[dev_cell_sce$clusters]
 dev_cell_sce %>% colData()
 ```
-
 
 ```{r}
 # remove doublets
@@ -377,28 +572,35 @@ saveRDS(dev_cell_sce, "../data/kidney/kidney-map/GSE129798/dev_cell_sce.rds")
 ```
 
 
+# the below codes are deprived
+
 ## annotate region information
 ```{r}
 library(SingleR)
 library(magrittr)
 
-dev_cell_sce <- readRDS("../data/kidney/kidney-map/dev-cell/dev_cell_sce.rds")
+dev_cell_sce <- readRDS("../data/kidney/kidney-map/GSE150338/dev_cell_sce.rds")
 ref_mouse_tubule_sce <- readRDS("../data/kidney/kidney-map/GSE150338/ref_mouse_tubule_sce.rds")
 colData(ref_mouse_tubule_sce)
 
-cell_to_annotate <- c("PTS1", "PTS2", "PTS3", "LOH", "CD_PC", "CD_IC", "DCT")
-subs_dev_cell_tubule <- dev_cell_sce[, dev_cell_sce$cell_type %in% cell_to_annotate]
+dev_cell_agg <- aggregateAcrossCells(dev_cell_sce, 
+                                     ids = colData(dev_cell_sce)$clusters, 
+                                     coldata.merge = list(mito_percent = median), 
+                                     use.assay.type = "logcounts")
+
+# cell_to_annotate <- c("PTS1", "PTS2", "PTS3", "LOH", "CD_PC", "CD_IC", "DCT")
+# subs_dev_cell_tubule <- dev_cell_sce[, dev_cell_sce$cell_type %in% cell_to_annotate]
 
 set.seed(109)
-tubule_pred <- SingleR(test = subs_dev_cell_tubule, 
+tubule_pred <- SingleR(test = dev_cell_agg, 
                        ref = ref_mouse_tubule_sce, 
                        labels = ref_mouse_tubule_sce$cell_type, 
                        assay.type.test = "logcounts", 
                        assay.type.ref = "tpm", 
-                       de.method = "t", 
-                       de.n = 15)
+                       de.method = "classic")
 
 tubule_pred$labels %>% table
+cs <- rownames(tubule_pred)
 ```
 
 ```{r}
@@ -443,10 +645,18 @@ knitr::include_graphics("../data/kidney/kidney-map/GSE150338/tubule_region.png")
 
 ```{r}
 # quality check
-tubule_pred$scores %>% 
+pdf("tubule_pre.pdf")
+tubule_pred$scores %>% as.data.frame(row.names = cs) %>% as.matrix() %>% 
     pheatmap::pheatmap(angle_col = 315, 
                        cluster_cols = T, 
-                       color = viridis::viridis(n = 1000, option = "D"))
+                       show_rownames = T,
+                       show_colnames = T,
+                       color = viridis::viridis(n = 1000, option = "H"), 
+                       fontsize_row = 5, 
+                       display_numbers = TRUE, 
+                       fontsize_number = 4, 
+                       number_format = "%.3f")
+dev.off()
 
 plotDeltaDistribution(tubule_pred, 
                       show = "delta.med")

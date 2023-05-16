@@ -1,3 +1,4 @@
+https://trace.ncbi.nlm.nih.gov/Traces/sra-reads-be/fastq?acc=SRR11773226
 https://trace.ncbi.nlm.nih.gov/Traces/sra-reads-be/fastq?acc=SRR11773227
 https://trace.ncbi.nlm.nih.gov/Traces/sra-reads-be/fastq?acc=SRR11773228
 https://trace.ncbi.nlm.nih.gov/Traces/sra-reads-be/fastq?acc=SRR11773229
