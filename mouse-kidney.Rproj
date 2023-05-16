@@ -11,3 +11,9 @@ Encoding: UTF-8
 
 RnwWeave: Sweave
 LaTeX: pdfLaTeX
+
+ZoteroLibraries: "My Library"
+
+PythonType: virtualenv
+PythonVersion: 3.9.16
+PythonPath: ~/venvs/biopy/bin/python
