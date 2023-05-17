@@ -1,0 +1,302 @@
+---
+title: "06_analysis"
+author: "yincy"
+date: 2023/05/06
+format: html
+editor: visual
+---
+
+# marker gene detection
+
+```{r}
+library(scran)
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/harmonized_integrated.rds")
+
+sces$cell_type <- factor(sces$cell_type, levels = c("Afferent/Efferent Endothelial", "Endothelial", # endothelium
+                                                    "Parietal Endothelial", "Spinal Endothelial", 
+                                                    "Glomerular Endothelial", 
+                                                    
+                                                    "B Cells", "Cd4 T Cells", "Cd8 T Cells", "NK Cells", # immune
+                                                    "Monocytes", "Dendritic Cells", "Macrophages", 
+                                                    
+                                                    "Fibroblast", "VSMC", "Pericytes", "Podocyte", # interstital
+                                                    "Mesangial Cells", 
+                                                    
+                                                    "Sympathetic Neurons", "Sensory Neurons", # neurons
+                                                    "Satellite Glia", "Schwann Cells", 
+                                                    
+                                                    "PTS1", "PTS2", "PTS3", "LOH_DTL1", "LOH_DTL2", # renal tubule
+                                                    "LOH_DTL3", "LOH_ATL", "LOH_MTAL", "LOH_CTAL", 
+                                                    "DCT", "CNT", 
+                                                    
+                                                    "CCD_IC", "CCD_PC", "OMCD_IC",  # collection ducts
+                                                    "OMCD_PC", "IMCD_IC", "IMCD_PC"))
+```
+
+```{r}
+set.seed(105)
+fmarkers <- findMarkers(sces, 
+                        groups = sces$cell_type, 
+                        test.type = "wilcox",
+                        pval.type = "all", 
+                        min.prop = 0.25, 
+                        assay.type = "logcounts")
+
+fmarkers %>% names
+source("R/idconv.R")
+fmarkers[[2]] %>% rownames() %>% head(50) %>% idconv(from_type = "GENEID", to_type = "SYMBOL")
+
+saveRDS(fmarkers, "../data/kidney/kidney-map/integrated_data/cell_type_markers.rds")
+```
+
+## plot marker genes
+
+```{r, message=FALSE}
+library(scater)
+library(ggplot2)
+library(dplyr)
+source("R/idconv.R")
+plotExpression(sces,
+               features = fmarkers[[14]] %>% rownames() %>% .[1:20] %>% idconv(from_type = "GENEID", to_type = "SYMBOL"),
+               x = "cell_type",
+               colour_by = "cell_type",
+               point_size = 0.2,
+               exprs_values = "logcounts") +
+    theme(axis.text.x = element_text(angle = -70, hjust = 0, vjust = 0.5, size = 7),
+          legend.position = "none")
+
+ggsave("markers.pdf", width = 10, height = 30)
+cell_location <- colData(sces) %>% as.data.frame() %>% cbind(reducedDim(sces, 3)) %>% 
+    group_by(cell_type) %>% 
+    summarise(x = median(TSNE1), 
+              y = median(TSNE2))
+
+# endothelium markers
+markers_endothelium <- c("Pecam1" = "ENSMUSG00000020717", # Cd31 endothelium
+                         "Calcrl" = "ENSMUSG00000059588", # Afferent/Efferent
+                         "ccdc198" = "ENSMUSG00000021850", # parietal
+                         "Spock2" = "ENSMUSG00000058297", # spinal
+                         "Plk2" = "ENSMUSG00000021701") # glomerular
+
+markers_immune <- c("Ptprc" = "ENSMUSG00000026395", # Cd45
+                    "Cd79a" = "ENSMUSG00000003379", # B cells
+                    "Cd4" = "ENSMUSG00000023274", # Cd4 T cell
+                    "Cd8b1" = "ENSMUSG00000053044", # Cd8 T cell
+                    "Gzma" = "ENSMUSG00000023132", # NK cell
+                    "Csf1r" = "ENSMUSG00000024621", # monocytes
+                    "C1qa" = "ENSMUSG00000036887"  # macrophages
+                    )
+
+markers_interstitial <- c("Krt19" = "ENSMUSG00000020911", # fibroblast
+                          "Cnn1" = "ENSMUSG00000001349", # VSMC
+                          "Acta2" = "ENSMUSG00000035783", 
+                          "Cspg4" = "ENSMUSG00000032911", 
+                          "Pdgfrb" = "ENSMUSG00000024620", 
+                          "Nphs2" = "ENSMUSG00000026602", # podocytes 
+                          "Bgn" = "ENSMUSG00000031375", #  Mesangial
+                          "Gata3" = "ENSMUSG00000015619", 
+                          "F2r" = "ENSMUSG00000048376", 
+                          "Vcl" = "ENSMUSG00000021823", 
+                          "Cpm" = "ENSMUSG00000020183") 
+
+markers_renal_tubule <- c("Slc5a2" = "ENSMUSG00000030781", # PTS1 
+                          "Slc22a6" = "ENSMUSG00000024650", # PTS2
+                          "Slc6a18" = "ENSMUSG00000021612", # PTS3
+                          "C3" = "ENSMUSG00000024164", # LOH_DTL1
+                          "Bst1" = "ENSMUSG00000029082", # LOH_DTL2
+                          "Slco4a1" = "ENSMUSG00000038963", # LOH_DTL3
+                          "Upk3b" = "ENSMUSG00000042985", # LOH_ATL
+                          "Nccrp1" = "ENSMUSG00000047586", # LOH_MTAL
+                          "Slc5a1" = "ENSMUSG00000011034", # LOH_CTAL
+                          "Slc12a3" = "ENSMUSG00000031766", # DCT
+                          "Trpv5" = "ENSMUSG00000036899" # CNT
+                          )
+
+markers_collection_tube <- c("Slc26a4" = "ENSMUSG00000020651", # CCD_IC, Atp6v1g3
+                             "Aqp6" = "ENSMUSG00000043144", # OMCD_IC, Glod5, Atp6v1g3,  Slc4a1
+                             "P2ry14" = "ENSMUSG00000036381", # IMCD_IC,Atp6v1g3, Aqp6, Slc4a1
+                             
+                             "Hsd11b2" = "ENSMUSG00000031891", # CCD_PC, Tmem229a,Tbck, Kcne1, Mgat4c, Car15
+                             "Ppic" = "ENSMUSG00000024538", # OMCD_PC, Btc, Ptger1, 
+                             "Krt23" = "ENSMUSG00000006777" # IMCD_PC, Aldh1a3, Wfs1, Elf5
+                             )
+
+idconv("Hsd11b2", from_type = "SYMBOL", to_type = "GENEID")
+```
+
+
+```{r}
+library(tidyr)
+library(dplyr)
+
+df <- makePerCellDF(sces, features = markers_endothelium) 
+df <- df %>% tidyr::pivot_longer(col = starts_with("ENS"), names_to = "ensembl", values_to = "logcounts")
+lb <- as_labeller(c("ENSMUSG00000020717" = "Pecam1", 
+                    "ENSMUSG00000059588" = "Calcr1", 
+                    "ENSMUSG00000021850" = "ccdc198", 
+                    "ENSMUSG00000058297" = "Spock2", 
+                    "ENSMUSG00000021701" = "Plk2"))
+cell_location <- df %>% filter(grepl("Endothelial", cell_type)) %>% 
+    group_by(cell_type) %>% 
+    summarise(x = median(TSNE.1), 
+              y = median(TSNE.2))
+df %>% 
+    dplyr::filter(grepl("Endothelial", cell_type)) %>% 
+    ggplot(aes(x = TSNE.1, y = TSNE.2)) +
+    geom_point(aes(colour = logcounts), size = 0.4, alpha = 1/3) +
+    geom_text(data = cell_location, aes(x = x, y = y, label = cell_type), size = 2) +
+    facet_wrap(vars(ensembl), ncol = 2, 
+               strip.position = "right", 
+               scales = "free_y",
+               labeller = lb) +
+    scale_x_discrete(name = NULL) +
+    scale_color_viridis_b()
+ggsave("markers.pdf")
+```
+
+```{r}
+for( n in unique(colData(sces)$cell_type)){
+    my_color <- rep("grey", length(colData(sces)$cell_type))
+    names(my_color) <- as.character(colData(sces)$cell_type)
+    my_color[colData(sces)$cell_type == n] <- "red"
+    
+    plotReducedDim(object = sces, 
+                   dimred = "TSNE", 
+                   colour_by = "cell_type", 
+                   text_by = "cell_type", 
+                   point_size = 0.2, 
+                   text_size = 2.5) +
+        scale_color_manual(values = my_color) +
+        guides(colour = guide_legend(override.aes = list(size = 2)))
+    
+    ggsave(paste0("results/sces/the-", n, "-cluster.pdf"))
+}
+```
+
+# cell-cell communication
+
+## prepare for cellphonedb
+
+```{r}
+library(Matrix)
+library(dplyr)
+library(babelgene)
+
+
+sces <- readRDS("../data/kidney/kidney-map/harmonized_sce.rds")
+lc <- logcounts(sces)
+genes <- data.frame(ensembl_mouse = rownames(sces))
+ot <- orthologs(genes = genes$ensembl_mouse, 
+          species = "mouse", 
+          human = F)
+
+genes <- left_join(genes, ot, by = c("ensembl_mouse" = "ensembl")) %>% dplyr::filter(!is.na(human_ensembl))
+genes <- genes %>% dplyr::filter(!duplicated(ensembl_mouse))
+genes <- genes %>% dplyr::filter(!duplicated(human_ensembl))
+
+lc <- lc[rownames(lc) %in% genes$ensembl_mouse, ]
+or <- match(rownames(lc), genes$ensembl_mouse)
+lc <- lc[or, ]
+rownames(lc) <- genes$human_ensembl
+lc <- lc %>% as.matrix %>% as.data.frame() %>% tibble::rownames_to_column("Gene")
+
+write.table(lc, 
+            "../data/kidney/kidney-map/cellphonedb_input/counts.csv", 
+            row.names = F, 
+            quote = F, 
+            sep = ",")
+
+write.table(genes$human_ensembl, 
+            file = "../data/kidney/kidney-map/cellphonedb_input/features.csv",
+            row.names = F, 
+            col.names = F, 
+            quote = F, 
+            sep = ",")
+
+write.table(colnames(sces), 
+            file = "../data/kidney/kidney-map/cellphonedb_input/barcodes.csv", 
+            row.names = F, 
+            col.names = F, 
+            quote = F, 
+            sep = ",")
+
+meta_file <- colData(sces) %>% as.data.frame()
+meta_file <- meta_file %>% dplyr::rename("Cell" = "cell_ids") %>% dplyr::select(Cell, cell_type)
+write.table(meta_file, 
+            file = "../data/kidney/kidney-map/cellphonedb_input/meta_file.csv", 
+            sep = ",", 
+            row.names = F, 
+            quote = F)
+
+# microenvironment file
+colData(sces) %>% 
+    as.data.frame() %>% 
+    rename("Cell" = "cell_ids") %>% 
+    select(Cell, location) %>% 
+    write.table("../data/kidney/kidney-map/cellphonedb_input/micronenvironment.csv", 
+                row.names = F, 
+                quote = F, 
+                sep = ",")
+
+# DEGs
+library(scran)
+markers <- findMarkers(sces, 
+                       groups = sces$cell_type, 
+                       test.type = "wilcox", 
+                       pval.type = "some", 
+                       )
+```
+
+## download cellphonedb database
+
+```{python}
+from cellphonedb.utils import db_utils
+from cellphonedb.utils import db_releases_utils
+from IPython.display import HTML, display
+
+display(HTML(db_releases_utils.get_remote_database_versions_html()['db_releases_html_table']))
+
+db_utils.download_database("/home/yincy/git/data/cellphonedb/v4.1.0/", cpdb_version = "v4.1.0")
+```
+
+```{python}
+from cellphonedb.src.core.methods import cpdb_analysis_method
+
+mean, deconvoluted = cpdb_analysis_method.call(
+    cpdb_file_path = "../data/cellphonedb/v4.1.0/cellphonedb.zip",
+    meta_file_path = "../data/kidney/kidney-map/cellphonedb_input/meta_file.csv",
+    counts_file_path = "../data/kidney/kidney-map/cellphonedb_input/counts.csv",
+    counts_data = "ensembl",
+    output_path = "/home/yincy/git/mouse-kidney/cpdb_outs/analysis/"
+)
+```
+
+```{python}
+# statistical_analysis
+from cellphonedb.src.core.methods import cpdb_statistical_analysis_method
+
+
+deconvoluted, means, pvalue, significant_means = cpdb_statistical_analysis_method.call(
+    cpdb_file_path = "/home/yincy/git/data/cellphonedb/v4.1.0/cellphonedb.zip",
+    meta_file_path = "../data/kidney/kidney-map/cellphonedb_input/meta_file.csv",
+    counts_file_path = "../data/kidney/kidney-map/cellphonedb_input/counts.csv",
+    counts_data = "ensembl",
+    output_path = "/home/yincy/git/mouse-kidney/cpdb_outs/statistical_analysis",
+    threshold = 0,
+    threads = 4
+)
+```
+
+```{python}
+from cellphonedb.src.core.methods import cpdb_degs_analysis_method
+```
+
+## visualize cell-cell communication results
+
+```{r}
+library(ggplot2)
+
+
+```
+
+# 
