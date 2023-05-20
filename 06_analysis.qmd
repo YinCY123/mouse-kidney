@@ -6,15 +6,19 @@ format: html
 editor: visual
 ---
 
+
 # marker gene detection
 
 ```{r}
 library(scran)
-sces <- readRDS("../data/kidney/kidney-map/integrated_data/harmonized_integrated.rds")
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
 
-sces$cell_type <- factor(sces$cell_type, levels = c("Afferent/Efferent Endothelial", "Endothelial", # endothelium
-                                                    "Parietal Endothelial", "Spinal Endothelial", 
+sces$cell_type <- factor(sces$cell_type, levels = c("Endothelial", # endothelium
                                                     "Glomerular Endothelial", 
+                                                    "Afferent/Efferent Endothelial",  
+                                                    "Spinal Endothelial",
+                                                    "Parietal Endothelial",  
+                                                    
                                                     
                                                     "B Cells", "Cd4 T Cells", "Cd8 T Cells", "NK Cells", # immune
                                                     "Monocytes", "Dendritic Cells", "Macrophages", 
@@ -29,8 +33,8 @@ sces$cell_type <- factor(sces$cell_type, levels = c("Afferent/Efferent Endotheli
                                                     "LOH_DTL3", "LOH_ATL", "LOH_MTAL", "LOH_CTAL", 
                                                     "DCT", "CNT", 
                                                     
-                                                    "CCD_IC", "CCD_PC", "OMCD_IC",  # collection ducts
-                                                    "OMCD_PC", "IMCD_IC", "IMCD_PC"))
+                                                    "CCD_IC", "OMCD_IC", "IMCD_IC", # collection ducts
+                                                    "CCD_PC", "OMCD_PC", "IMCD_PC"))
 ```
 
 ```{r}
@@ -41,10 +45,11 @@ fmarkers <- findMarkers(sces,
                         pval.type = "all", 
                         min.prop = 0.25, 
                         assay.type = "logcounts")
-
+fmarkers <- readRDS("../data/kidney/kidney-map/integrated_data/cell_type_markers.rds")
 fmarkers %>% names
-source("R/idconv.R")
-fmarkers[[2]] %>% rownames() %>% head(50) %>% idconv(from_type = "GENEID", to_type = "SYMBOL")
+source("functions/idconv.R")
+idconv("Cd209a")
+fmarkers[[9]] %>% rownames() %>% head(50) %>% idconv(from_type = "GENEID", to_type = "SYMBOL")
 
 saveRDS(fmarkers, "../data/kidney/kidney-map/integrated_data/cell_type_markers.rds")
 ```
@@ -55,9 +60,11 @@ saveRDS(fmarkers, "../data/kidney/kidney-map/integrated_data/cell_type_markers.r
 library(scater)
 library(ggplot2)
 library(dplyr)
-source("R/idconv.R")
+library(tidyr)
+source("functions//idconv.R")
+
 plotExpression(sces,
-               features = fmarkers[[14]] %>% rownames() %>% .[1:20] %>% idconv(from_type = "GENEID", to_type = "SYMBOL"),
+               features = idconv("Cd209a"),
                x = "cell_type",
                colour_by = "cell_type",
                point_size = 0.2,
@@ -65,39 +72,45 @@ plotExpression(sces,
     theme(axis.text.x = element_text(angle = -70, hjust = 0, vjust = 0.5, size = 7),
           legend.position = "none")
 
-ggsave("markers.pdf", width = 10, height = 30)
-cell_location <- colData(sces) %>% as.data.frame() %>% cbind(reducedDim(sces, 3)) %>% 
-    group_by(cell_type) %>% 
-    summarise(x = median(TSNE1), 
-              y = median(TSNE2))
+# ggsave("markers.pdf", width = 10, height = 30)
+# cell_location <- colData(sces) %>% as.data.frame() %>% cbind(reducedDim(sces, 3)) %>% 
+#     group_by(cell_type) %>% 
+#     summarise(x = median(TSNE1), 
+#               y = median(TSNE2))
+```
 
-# endothelium markers
-markers_endothelium <- c("Pecam1" = "ENSMUSG00000020717", # Cd31 endothelium
-                         "Calcrl" = "ENSMUSG00000059588", # Afferent/Efferent
-                         "ccdc198" = "ENSMUSG00000021850", # parietal
-                         "Spock2" = "ENSMUSG00000058297", # spinal
-                         "Plk2" = "ENSMUSG00000021701") # glomerular
 
-markers_immune <- c("Ptprc" = "ENSMUSG00000026395", # Cd45
-                    "Cd79a" = "ENSMUSG00000003379", # B cells
+### markers
+
+```{r}
+markers_immune <- c("Cd79a" = "ENSMUSG00000003379", # B cells
                     "Cd4" = "ENSMUSG00000023274", # Cd4 T cell
                     "Cd8b1" = "ENSMUSG00000053044", # Cd8 T cell
                     "Gzma" = "ENSMUSG00000023132", # NK cell
                     "Csf1r" = "ENSMUSG00000024621", # monocytes
+                    "Cd209a" = "ENSMUSG00000031494", # Dendritic cell
                     "C1qa" = "ENSMUSG00000036887"  # macrophages
                     )
 
+markers_endothelium <- c("Pecam1" = "ENSMUSG00000020717", # Cd31 endothelium
+                         "Calcrl" = "ENSMUSG00000059588", # Afferent/Efferent
+                         "Plk2" = "ENSMUSG00000021701", # glomerular
+                         "Spock2" = "ENSMUSG00000058297", # spinal
+                         "ccdc198" = "ENSMUSG00000021850" # parietal
+                         )
+                         
+
 markers_interstitial <- c("Krt19" = "ENSMUSG00000020911", # fibroblast
                           "Cnn1" = "ENSMUSG00000001349", # VSMC
-                          "Acta2" = "ENSMUSG00000035783", 
-                          "Cspg4" = "ENSMUSG00000032911", 
-                          "Pdgfrb" = "ENSMUSG00000024620", 
-                          "Nphs2" = "ENSMUSG00000026602", # podocytes 
-                          "Bgn" = "ENSMUSG00000031375", #  Mesangial
-                          "Gata3" = "ENSMUSG00000015619", 
-                          "F2r" = "ENSMUSG00000048376", 
-                          "Vcl" = "ENSMUSG00000021823", 
-                          "Cpm" = "ENSMUSG00000020183") 
+                          "Cspg4" = "ENSMUSG00000032911", # pericyte
+                          "Pdgfrb" = "ENSMUSG00000024620", # pericyte
+                          "Nphs1" = "ENSMUSG00000006649", # podocytes 
+                          # "Bgn" = "ENSMUSG00000031375", 
+                          "Gata3" = "ENSMUSG00000015619" #  Mesangial
+                          # "F2r" = "ENSMUSG00000048376", 
+                          # "Vcl" = "ENSMUSG00000021823", 
+                          # "Cpm" = "ENSMUSG00000020183"
+                          )
 
 markers_renal_tubule <- c("Slc5a2" = "ENSMUSG00000030781", # PTS1 
                           "Slc22a6" = "ENSMUSG00000024650", # PTS2
@@ -112,55 +125,172 @@ markers_renal_tubule <- c("Slc5a2" = "ENSMUSG00000030781", # PTS1
                           "Trpv5" = "ENSMUSG00000036899" # CNT
                           )
 
-markers_collection_tube <- c("Slc26a4" = "ENSMUSG00000020651", # CCD_IC, Atp6v1g3
+markers_collection_tube <- c("Atp6v1g3" = "ENSMUSG00000026394", # IC
+                             "Slc26a4" = "ENSMUSG00000020651", # CCD_IC, Atp6v1g3
                              "Aqp6" = "ENSMUSG00000043144", # OMCD_IC, Glod5, Atp6v1g3,  Slc4a1
                              "P2ry14" = "ENSMUSG00000036381", # IMCD_IC,Atp6v1g3, Aqp6, Slc4a1
                              
+                             "Aqp2" = "ENSMUSG00000023013", # PC
                              "Hsd11b2" = "ENSMUSG00000031891", # CCD_PC, Tmem229a,Tbck, Kcne1, Mgat4c, Car15
                              "Ppic" = "ENSMUSG00000024538", # OMCD_PC, Btc, Ptger1, 
                              "Krt23" = "ENSMUSG00000006777" # IMCD_PC, Aldh1a3, Wfs1, Elf5
                              )
-
-idconv("Hsd11b2", from_type = "SYMBOL", to_type = "GENEID")
 ```
 
 
-```{r}
-library(tidyr)
-library(dplyr)
+### immune markers
 
-df <- makePerCellDF(sces, features = markers_endothelium) 
-df <- df %>% tidyr::pivot_longer(col = starts_with("ENS"), names_to = "ensembl", values_to = "logcounts")
-lb <- as_labeller(c("ENSMUSG00000020717" = "Pecam1", 
-                    "ENSMUSG00000059588" = "Calcr1", 
-                    "ENSMUSG00000021850" = "ccdc198", 
-                    "ENSMUSG00000058297" = "Spock2", 
-                    "ENSMUSG00000021701" = "Plk2"))
-cell_location <- df %>% filter(grepl("Endothelial", cell_type)) %>% 
-    group_by(cell_type) %>% 
-    summarise(x = median(TSNE.1), 
-              y = median(TSNE.2))
+```{r}
+df <- makePerCellDF(sces, features = markers_immune, use.dimred = F) %>% 
+    tidyr::pivot_longer(col = starts_with("ENS"), names_to = "ensembl", values_to = "logcounts")
+lb <- as_labeller(setNames(names(markers_immune), markers_immune))
+
+immune_cells <- c("B Cells", "Cd4 T Cells", "Cd8 T Cells", "NK Cells", 
+                  "Monocytes", "Dendritic Cells", "Macrophages")
+
 df %>% 
-    dplyr::filter(grepl("Endothelial", cell_type)) %>% 
-    ggplot(aes(x = TSNE.1, y = TSNE.2)) +
-    geom_point(aes(colour = logcounts), size = 0.4, alpha = 1/3) +
-    geom_text(data = cell_location, aes(x = x, y = y, label = cell_type), size = 2) +
-    facet_wrap(vars(ensembl), ncol = 2, 
+    dplyr::filter(cell_type %in% immune_cells) %>% 
+    mutate(ensembl = factor(ensembl, levels = markers_immune), 
+           cell_type = factor(cell_type, levels = immune_cells)) %>% 
+    ggplot(aes(x = cell_type, y = logcounts)) +
+    geom_violin(aes(fill = cell_type), colour = NA, show.legend = F, scale = "width") +
+    # geom_jitter(aes(colour = cell_type), show.legend = F, width = 0.1, size = 0.2) +
+    facet_wrap(vars(ensembl), ncol = 1, 
                strip.position = "right", 
                scales = "free_y",
                labeller = lb) +
     scale_x_discrete(name = NULL) +
-    scale_color_viridis_b()
-ggsave("markers.pdf")
+    scale_y_continuous(name = NULL) +
+    scale_color_brewer(type = "qual", palette = "Set1") +
+    theme(panel.background = element_blank(), 
+          panel.grid.major = element_line(color = "grey70", linetype = 2, linewidth = 0.1), 
+          axis.text.x = element_text(size = 8))
+ggsave("results/markers/immune_cell_markers.tiff", 
+       width = 5, height = 7)
 ```
 
+
+### endothelium markers
+
 ```{r}
-for( n in unique(colData(sces)$cell_type)){
-    my_color <- rep("grey", length(colData(sces)$cell_type))
-    names(my_color) <- as.character(colData(sces)$cell_type)
-    my_color[colData(sces)$cell_type == n] <- "red"
+df <- makePerCellDF(sces, features = markers_endothelium, use.dimred = F) %>% 
+    pivot_longer(cols = starts_with("ENS"), names_to = "ensembl", values_to = "logcounts")
+lb <- as_labeller(setNames(names(markers_endothelium), markers_endothelium))
+
+endothelium <- c("Afferent/Efferent Endothelial", "Endothelial", 
+                 "Parietal Endothelial", "Spinal Endothelial", 
+                 "Glomerular Endothelial")
+
+df %>% 
+    dplyr::filter(grepl("Endothelial", cell_type)) %>% 
+    ggplot(aes(cell_type, logcounts)) +
+    geom_violin(aes(fill = cell_type), color = NA, show.legend = F, scale = "width") +
+    facet_wrap(vars(ensembl), ncol = 1, strip.position = "right", 
+               scales = "free_y", 
+               labeller = lb) +
+    scale_x_discrete(name = NULL) +
+    scale_y_continuous(name = NULL) +
+    theme(panel.background = element_blank(), 
+          panel.grid.major = element_line(color = "grey70", linetype = 2, linewidth = 0.1), 
+          strip.text.y = element_text(size = 8))
+
+ggsave("results/markers/endothelium_markers.tiff")
+```
+
+
+### interstitial markers
+
+```{r}
+df <- makePerCellDF(sces, features = markers_interstitial, use.dimred = F) %>% 
+    pivot_longer(cols = starts_with("ENS"), names_to = "ensembl", values_to = "logcounts")
+lb <- as_labeller(setNames(names(markers_interstitial), markers_interstitial))
+
+interstitial_cells <- c("Fibroblast", "VSMC", "Pericytes", "Podocyte", "Mesangial Cells")
+
+df %>% 
+    dplyr::filter(cell_type %in% interstitial_cells) %>% 
+    mutate(ensembl = factor(ensembl, levels = markers_interstitial), 
+           cell_type = factor(cell_type, levels = interstitial_cells)) %>% 
+    ggplot(aes(cell_type, logcounts)) +
+    geom_violin(aes(fill = cell_type), color = NA, show.legend = F, scale = "width") +
+    facet_wrap(vars(ensembl), 
+               ncol = 1, 
+               scales = "free_y", 
+               labeller = lb, 
+               strip.position = "right") +
+    scale_x_discrete(name = NULL) +
+    scale_y_continuous(name = NULL) +
+    theme(panel.background = element_blank(), 
+          panel.grid.major = element_line(linetype = 2, linewidth = 0.1, colour = "grey70"),
+          strip.text.y = element_text(size = 8))
+
+ggsave("results/markers/interstitial_cell_markers.tiff", 
+       width = 7, height = 10)
+```
+
+
+### renal tubule markers
+
+```{r}
+df <- makePerCellDF(sces, features = markers_renal_tubule, use.dimred = F) %>% 
+    pivot_longer(cols = starts_with("ENS"), names_to = "ensembl", values_to = "logcounts") 
+
+lb <- as_labeller(setNames(names(markers_renal_tubule), markers_renal_tubule))
+renal_tubule_cells <- c("PTS1", "PTS2", "PTS3", "LOH_DTL1", "LOH_DTL2", 
+                        "LOH_DTL3", "LOH_ATL", "LOH_MTAL", "LOH_CTAL", "DCT", "CNT")
+df %>% 
+    dplyr::filter(cell_type %in% renal_tubule_cells) %>% 
+    mutate(ensembl = factor(ensembl, levels = markers_renal_tubule), 
+           cell_type = factor(cell_type, levels = renal_tubule_cells)) %>% 
+    ggplot(aes(cell_type, logcounts)) +
+    geom_violin(aes(fill = cell_type), color = NA, show.legend = F, scale = "width") +
+    facet_wrap(vars(ensembl), 
+               ncol = 1, 
+               scales = "free_y", 
+               labeller = lb,
+               strip.position = "right") +
+    scale_x_discrete(name = NULL) +
+    scale_y_continuous(name = NULL) +
+    theme(panel.background = element_blank(), 
+          panel.grid.major = element_line(linetype = 2, linewidth = 0.1, colour = "grey70"), 
+          strip.text.y = element_text(size = 8))
+ggsave("results/markers/renal_tubule_marker.tiff", 
+       width = 8.5, height = 11)
+```
+
+
+### collection ducts markers
+
+```{r}
+df <- makePerCellDF(sces, features = markers_collection_tube, use.dimred = F) %>% 
+    pivot_longer(cols = starts_with("ENS"), names_to = "ensembl", values_to = "logcounts")
+lb <- as_labeller(setNames(names(markers_collection_tube), markers_collection_tube))
+
+collection_ducts <- c("CCD_IC", "OMCD_IC", "IMCD_IC", "CCD_PC", "OMCD_PC", "IMCD_PC")
+df %>% filter(cell_type %in% collection_ducts) %>% 
+    mutate(cell_type = factor(cell_type, levels = collection_ducts), 
+           ensembl = factor(ensembl, levels = markers_collection_tube)) %>% 
+    ggplot(aes(cell_type, logcounts)) +
+    geom_violin(aes(fill = cell_type), color = NA, show.legend = F, scale = "width") +
+    facet_wrap(vars(ensembl), 
+               ncol = 1, 
+               labeller = lb, 
+               strip.position = "right") +
+    scale_x_discrete(name = NULL) +
+    scale_y_continuous(name = NULL) +
+    theme(panel.background = element_blank(), 
+          panel.grid.major = element_line(linetype = 2, linewidth = 0.1, colour = "grey79"), 
+          strip.text.y = element_text(size = 8))
+```
+
+
+```{r}
+for( n in unique(colData(combined_sces)$cell_type)){
+    my_color <- rep("grey", length(colData(combined_sces)$cell_type))
+    names(my_color) <- as.character(colData(combined_sces)$cell_type)
+    my_color[colData(combined_sces)$cell_type == n] <- "red"
     
-    plotReducedDim(object = sces, 
+    plotReducedDim(object = combined_sces, 
                    dimred = "TSNE", 
                    colour_by = "cell_type", 
                    text_by = "cell_type", 
@@ -173,6 +303,8 @@ for( n in unique(colData(sces)$cell_type)){
 }
 ```
 
+
+
 # cell-cell communication
 
 ## prepare for cellphonedb
@@ -183,7 +315,7 @@ library(dplyr)
 library(babelgene)
 
 
-sces <- readRDS("../data/kidney/kidney-map/harmonized_sce.rds")
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
 lc <- logcounts(sces)
 genes <- data.frame(ensembl_mouse = rownames(sces))
 ot <- orthologs(genes = genes$ensembl_mouse, 
@@ -239,17 +371,35 @@ colData(sces) %>%
                 sep = ",")
 
 # DEGs
-library(scran)
-markers <- findMarkers(sces, 
-                       groups = sces$cell_type, 
-                       test.type = "wilcox", 
-                       pval.type = "some", 
-                       )
+fmarkers[[1]]
+fmarkers %>% names
+DEG_list <- vector(mode = "list", length = length(fmarkers))
+names(DEG_list) <- names(fmarkers)
+for(name in names(DEG_list)){
+    DEG_list[[name]] <- fmarkers[[name]] %>% 
+        as.data.frame() %>% 
+        tibble::rownames_to_column("ensembl") %>%
+        dplyr::filter(p.value < 0.05) %>% 
+        dplyr::select("ensembl") %>% 
+        magrittr::inset2("cell_type", value = name) %>% 
+        dplyr::relocate(cell_type)
+}
+
+library(purrr)
+map_df(DEG_list, .f = dim) %>% rowSums()
+
+deg <- map_dfr(DEG_list, .f = bind_rows)
+write.table(deg, "../data/kidney/kidney-map/cellphonedb_input/DEG.csv", 
+            row.names = F, 
+            quote = F, 
+            sep = ",")
 ```
+
 
 ## download cellphonedb database
 
 ```{python}
+#| eval: false
 from cellphonedb.utils import db_utils
 from cellphonedb.utils import db_releases_utils
 from IPython.display import HTML, display
@@ -259,7 +409,20 @@ display(HTML(db_releases_utils.get_remote_database_versions_html()['db_releases_
 db_utils.download_database("/home/yincy/git/data/cellphonedb/v4.1.0/", cpdb_version = "v4.1.0")
 ```
 
+
+
+## edit the database to include neuron specific interactions
+```{r}
+protein_input <- read.table("../data/cellphonedb/v4.1.0/protein_input.csv", 
+                            sep = ",", 
+                            header = TRUE)
+
+protein_input %>% dplyr::filter(other == "False")
+```
+
+
 ```{python}
+# analysis
 from cellphonedb.src.core.methods import cpdb_analysis_method
 
 mean, deconvoluted = cpdb_analysis_method.call(
@@ -267,7 +430,7 @@ mean, deconvoluted = cpdb_analysis_method.call(
     meta_file_path = "../data/kidney/kidney-map/cellphonedb_input/meta_file.csv",
     counts_file_path = "../data/kidney/kidney-map/cellphonedb_input/counts.csv",
     counts_data = "ensembl",
-    output_path = "/home/yincy/git/mouse-kidney/cpdb_outs/analysis/"
+    output_path = "/home/yincy/git/mouse-kidney/results/cpdb_outs/analysis/"
 )
 ```
 
@@ -281,22 +444,195 @@ deconvoluted, means, pvalue, significant_means = cpdb_statistical_analysis_metho
     meta_file_path = "../data/kidney/kidney-map/cellphonedb_input/meta_file.csv",
     counts_file_path = "../data/kidney/kidney-map/cellphonedb_input/counts.csv",
     counts_data = "ensembl",
-    output_path = "/home/yincy/git/mouse-kidney/cpdb_outs/statistical_analysis",
+    output_path = "/home/yincy/git/mouse-kidney/results/cpdb_outs/statistical_analysis",
     threshold = 0,
     threads = 4
 )
 ```
 
 ```{python}
+# deg analysis
 from cellphonedb.src.core.methods import cpdb_degs_analysis_method
+?cpdb_degs_analysis_method
+deconvoluted, means, relevant_interactions, significant_means = cpdb_degs_analysis_method.call(
+    cpdb_file_path = "../data/cellphonedb/v4.1.0/cellphonedb.zip", 
+    meta_file_path = "../data/kidney/kidney-map/cellphonedb_input/meta_file.csv",
+    counts_file_path = "../data/kidney/kidney-map/cellphonedb_input/counts.csv",
+    degs_file_path = "../data/kidney/kidney-map/cellphonedb_input/DEG.csv",
+    counts_data = "ensembl",
+    threshold = 0.1,
+    output_path = "../mouse-kidney/results/cpdb_outs/degs_analysis/"
+)
 ```
+
 
 ## visualize cell-cell communication results
 
 ```{r}
 library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(janitor)
+# library(ktplots)
+
+all_pval <- read.table("results/cpdb_outs/statistical_analysis/statistical_analysis_pvalues_05_18_2023_10:45:55.txt", 
+                       sep = "\t", 
+                       header = TRUE, 
+                       check.names = F) 
+
+all_siginificant_means <- read.table("results/cpdb_outs/statistical_analysis/statistical_analysis_significant_means_05_18_2023_10:45:55.txt",
+                                     sep = "\t", 
+                                     header = TRUE, 
+                                     check.names = F) 
 
 
+all_pval_long <- all_pval %>% 
+    select(-c(1, 3:12)) %>% 
+    pivot_longer(cols = !interacting_pair, names_to = "cell_pairs", values_to = "pval")
+
+
+all_siginificant_means_long <- all_siginificant_means %>% 
+    select(-c(1, 3:12)) %>% 
+    pivot_longer(cols = !interacting_pair, names_to = "cell_pairs", values_to = "mean") %>% 
+    filter(!is.na(mean))
+
+
+all_pval_means <- left_join(all_pval_long, all_siginificant_means_long, 
+                            by = join_by(interacting_pair, cell_pairs)) %>% 
+    filter(!(is.na(mean) | is.na(pval)))
 ```
 
-# 
+
+### interaction strength
+the interaction strength is defined by the sum of the mean interaction then normalized by the total cells of the two populations.
+
+```{r}
+# number of cells in each clusters
+number_of_cells <- sces$cell_type %>% 
+    table %>% 
+    as.data.frame() %>% 
+    magrittr::set_colnames(value = c("cell_type", "num_of_cells"))
+
+df <- expand.grid(cell_type_a = number_of_cells$cell_type, 
+                  cell_type_b = number_of_cells$cell_type)
+ids <- apply(df, 1, function(x){
+    identical(x[[1]], x[[2]])
+}) 
+df <- df[!ids, ]
+
+cell_numbers <- setNames(number_of_cells$num_of_cells, number_of_cells$cell_type)
+
+df$total_cells <- apply(df, 1, function(x){
+    cell_numbers[[x[[1]]]] + cell_numbers[[x[[2]]]]
+})
+
+
+interaction_strength <- all_pval_means %>% 
+    group_by(cell_pairs) %>% 
+    summarise(total_strength = sum(mean)) %>% 
+    separate(col = cell_pairs, into = c("cell_type_a", "cell_type_b"), sep = "\\|")
+
+# discard direction
+interaction_strength$ids <- interaction_strength %>% 
+    unite("ids", cell_type_a, cell_type_b, sep = "@") %>% pull(ids) %>% 
+    str_split(pattern = "@", n = 2) %>% 
+    sapply(function(x){str_c(sort(x), collapse = "@")})
+
+interaction_strength_nd <- aggregate(interaction_strength$total_strength, 
+          by = list(cell_pairs = interaction_strength$ids), 
+          FUN =sum) %>% 
+    magrittr::set_colnames(value = c("cell_pairs", "total_strength")) %>% 
+    separate(col = cell_pairs, into = c("cell_type_a", "cell_type_b"), sep = "@")
+
+interaction_df <- left_join(df, interaction_strength_nd, by = join_by("cell_type_a", "cell_type_b")) %>% 
+    filter(!is.na(total_strength)) %>% 
+    mutate(normalized_strength = round(total_strength / total_cells, 6))
+
+
+# neurons and renal tubule interaction
+cells_to_view <- c("Sympathetic Neurons", "Sensory Neurons", renal_tubule_cells)
+
+interaction_to_view <- interaction_df %>% 
+    dplyr::filter(cell_type_a %in% cells_to_view & cell_type_b %in% cells_to_view)
+interaction_to_view %>% arrange(-normalized_strength)
+```
+
+```{r}
+library(igraph)
+library(tidygraph)
+library(ggraph)
+
+g <- tbl_graph(nodes = number_of_cells[number_of_cells$cell_type %in% cells_to_view, ], 
+               edges = interaction_to_view[, c(1, 2, 5)], 
+               directed = F)
+
+g %>% 
+    ggraph(layout = "nicely") +
+    geom_edge_link(aes(edge_width = 10^normalized_strength)) +
+    geom_node_point() +
+    geom_node_text(aes(label = cell_type), size = 4, color = "black") +
+    scale_edge_width(name = "interaction\nstrength", range = c(0, 2))
+```
+
+
+
+```{r}
+library(stringr)
+library(scales)
+
+filter_sympathetic <- grepl("Sympathetic Neurons", all_pval_means$cell_pairs)
+filter_sensory <- grepl("Sensory Neurons", all_pval_means$cell_pairs)
+
+filter_immune <- grepl(str_c(immune_cells, collapse = "|"), all_pval_means$cell_pairs)
+filter_interstitial <- grepl(str_c(interstitial_cells, collapse = "|"), all_pval_means$cell_pairs)
+filter_renaltubule <- grepl(str_c(renal_tubule_cells, collapse = "|"), all_pval_means$cell_pairs)
+filter_collection_ducts <- grepl(str_c(collection_ducts, collapse = "|"), all_pval_means$cell_pairs)
+
+cols <- colorRampPalette(c("black", "blue", "yellow", "red"), alpha=TRUE)(n=1000)
+
+all_pval_means %>% 
+    dplyr::filter(filter_sympathetic & filter_immune & mean > 0) %>% 
+    ggplot(aes(cell_pairs, reorder(interacting_pair, mean))) +
+    geom_point(aes(size = mean, colour = pval)) +
+    scale_color_gradientn(breaks = breaks_extended(5), colors = rev(cols)) +
+    theme(axis.text.x = element_text(angle = -40, hjust = 0, vjust = 0.5))
+
+ggsave("sympathetic_interaction.pdf", 
+       height = 100, width = 15, 
+       limitsize = F)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

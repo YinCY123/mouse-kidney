@@ -4,7 +4,7 @@ harmonizeSCE <- function(sce_list, method, ...){
     require(AnnotationHub)
     ensdb <- AnnotationHub(localHub = TRUE)[["AH104895"]]
     
-    ugenes <- Reduce(union, lapply(sce_list, rownames))
+    ugenes <- Reduce(union, lapply(sce_list, rownames)) %>% unique()
     
     
     # for harmony
@@ -102,42 +102,5 @@ harmonizeSCE <- function(sce_list, method, ...){
         return(sce_list)
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
