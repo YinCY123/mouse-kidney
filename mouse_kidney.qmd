@@ -1,0 +1,46 @@
+---
+title: "The comprehensive single cell atlas of mouse kidney with regional information"
+format: docx
+author: Yin Chunyou
+editor: visual
+---
+
+# Abstract
+## Background
+Kidney is a highly heterogeneous organ, it is estimated that it has about 40 functionally different cell types. Single cell RNA sequencing is a powerful technology at detection cell type at highly complex tissue. But until now no single study have comprehensively identified all cell population resided in the kidney. Such as the glomeruli which is the functional units of the kidney, but it's account for only about 1% -1.5% of the volume. The components of the glomeruli is missing in most single cell or single nucleus RNA sequencing datasets. Another exception is the neurons components, the cell body of which located paravertebral, only it's axons extended into the kidney through renal hilus. In this study, we using the cutting-edge integration algorithms to integrate information from five mouse kidney sequencing datasets to generate an comprehensive single cell atlas of mouse kidney. As two of the datasets using microdissection technology to dissect different parts of the kidney to sequencing, so the regional information also integrated in this dataset.
+
+## Methods
+Using integration algorithm to integration five mouse kidney sequencing data into a whole, to generate an comprehensive single cell RNA sequencing data with regional information.
+
+## Results
+From the integrated data, almost all the cell types in the kidney is identified.
+
+## Conclusions
+As no single sequencing method have identified all kidney cell types. The integrated datasets with regional information will be a valuable resources for kidney research.
+
+
+# Methods
+## Searching for the suitable datasets
+
+
+## Evaluate different integration algorithms
+
+
+# Results
+
+
+# Discussion
+
+
+
+
+
+
+
+
+
+
+
+
+
+
