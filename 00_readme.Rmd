@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 # data
-- GSE150338: microdissected mouse tubules sequencing data, for inferring tubular single cells in GSE129798 comes from which microdissected location.   
+- GSE150338: microdissected mouse tubules sequencing data, for inferring tubular single cells in GSE129798 comes from which microdissected region.
 - GSE129798: whole mice kidney single cell sequencing data, with regional information  
 - GSE146912: mice glomerular sequencing data  
 - GSE175421: mouse sensory neurons from L1-L6  

@@ -107,24 +107,18 @@ hvgs %>% str
 ```{r}
 # dimensionality reduction
 set.seed(104)
-dpcs <- getDenoisedPCs(x = assay(glomer_sce, 2), 
-                       technical = glomer_variance, 
-                       subset.row = hvgs, 
-                       BPPARAM = MulticoreParam(12))
-dpcs %>% names
-dpcs$components %>% dim
-percentvar <- dpcs$percent.var
+glomer_sce <- runPCA(glomer_sce, subset_row = hvgs)
 
 library(PCAtools)
-elbow <- findElbowPoint(percentvar)
-data.frame(PC = 1:length(percentvar), 
-           percentvar = percentvar) %>% 
-    ggplot(aes(PC, percentvar)) +
+elbow <- findElbowPoint(attr(reducedDim(glomer_sce, "PCA"), "percentVar"))
+data.frame(PC = 1:length(attr(reducedDim(glomer_sce, "PCA"), "percentVar")), 
+           percentvar = attr(reducedDim(glomer_sce, "PCA"), "percentVar")) %>% 
+    ggplot(aes(PC, attr(reducedDim(glomer_sce, "PCA"), "percentVar"))) +
     geom_point() +
     geom_line() +
     geom_vline(xintercept = elbow, linetype = 2)
 
-reducedDim(glomer_sce, "PCA") <- dpcs$components[, 1:elbow]
+reducedDim(glomer_sce, "PCA") <- reducedDim(glomer_sce, "PCA")[, 1:7]
 
 set.seed(105)
 glomer_sce <- runTSNE(glomer_sce, use.dimred = "PCA", perplexity = 10)
@@ -139,9 +133,9 @@ plotReducedDim(glomer_sce,
 ```{r}
 # clustering
 set.seed(106)
-clusters <- clusterRows(reducedDim(glomer_sce, "TSNE"), 
+clusters <- clusterRows(reducedDim(glomer_sce, "PCA"), 
                         BLUSPARAM = SNNGraphParam(cluster.fun = "louvain", 
-                                                  k = 30,
+                                                  k = 10,
                                                  BPPARAM = MulticoreParam(10)))
 clusters %>% table
 
@@ -150,33 +144,33 @@ colLabels(glomer_sce) <- factor(clusters)
 
 
 ```{r}
-source("R/idconv.R")
+source("functions/idconv.R")
 library(patchwork)
 plotReducedDim(glomer_sce, 
                dimred = "TSNE", 
-               # colour_by = "percent_mito",
-               colour_by = idconv("Gata3"),
+               colour_by = idconv("Pax8"),
+               # colour_by = "label",
                text_by = "label", 
-               point_size = 0.4)  
+               point_size = 0.4)
+
 ```
 
 ```{r}
 # cell type annotation
-cell_type <- c("1" = "Mesangial Cells", 
-               "2" = "Parietal Endothelial", 
-               "3" = "Mesangial Cells",
-               "4" = "Afferent/Efferent Endothelial",
-               "5" = "Mesangial Cells", 
+cell_type <- c("1" = "Mesangial Cells A", 
+               "2" = "Parietal Epithelial", 
+               "3" = "Afferent/Efferent Endothelial",
+               "4" = "Mesangial Cells B",
+               "5" = "Podocyte", 
                "6" = "Podocyte",
-               "7" = "Podocyte", 
-               "8" = "Glomerular Endothelial", 
-               "9" = "Glomerular Endothelial", 
-               "10" = "Podocyte", 
-               "11" = "Immune Cells",
+               "7" = "Glomerular Endothelial", 
+               "8" = "Podocyte", 
+               "9" = "Immune Cells", 
+               "10" = "Glomerular Endothelial", 
+               "11" = "Glomerular Endothelial",
                "12" = "Glomerular Endothelial", 
-               "13" = "Glomerular Endothelial", 
-               "14" = "Podocyte", 
-               "15" = "VSMC")
+               "13" = "VSMC"
+               )
 
 glomer_sce$cell_type <- cell_type[glomer_sce$label]
 glomer_sce %>% colData %>% .$cell_type %>% table()
