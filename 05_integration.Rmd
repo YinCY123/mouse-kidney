@@ -159,14 +159,13 @@ gc()
 var_genes <- Reduce(union, lapply(sces, function(x){x@vargene})) %>% unique()
 var_genes %>% str
 
-scMultiIntegrate(objects = sces, 
-                 eigens = 30, 
-                 var.gene = var_genes, 
-                 align = "OLS", 
-                 npc = 50, 
-                 ncore = 3, 
-                 seed = 102)
-sces <- .Last.value
+sces <- scMultiIntegrate(objects = sces, 
+                         eigens = 30, 
+                         var.gene = var_genes, 
+                         align = "OLS", 
+                         npc = 50, 
+                         ncore = 6, 
+                         seed = 102)
 gc()
 
 set.seed(103)
@@ -178,15 +177,15 @@ saveRDS(sces, "../data/kidney/kidney-map/integrated_data/RISC_integrated.rds")
 library(ggplot2)
 DimPlot(sces, 
         slot = "cell.tsne", 
-        colFactor = "mito_percent", 
-        label = TRUE, 
-        label.font = 2, 
+        # colFactor = "mito_percent", 
+        colFactor = "mito_percent",
+        label = F, 
+        # label.font = 2, 
         adjust.label = 0) +
     theme(legend.position = "none")
 
 
-
-ggsave("figures/RISC_TSNE_cell_type.pdf")
+ggsave("results/figures/RISC_TSNE_location.pdf")
 ```
 
 

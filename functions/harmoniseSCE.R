@@ -1,8 +1,9 @@
 harmonizeSCE <- function(sce_list, method, ...){
     require(SingleCellExperiment)
     require(Matrix)
-    require(AnnotationHub)
-    ensdb <- AnnotationHub(localHub = TRUE)[["AH104895"]]
+    require(EnsDb.Mmusculus.v79)
+    # require(AnnotationHub)
+    # ensdb <- AnnotationHub(localHub = FALSE)[["AH104895"]]
     
     ugenes <- Reduce(union, lapply(sce_list, rownames)) %>% unique()
     
@@ -39,7 +40,7 @@ harmonizeSCE <- function(sce_list, method, ...){
             counts <- rbind(counts(sce_list[[i]]), dif_mat)
             
             gene <- data.frame(ensembl = rownames(counts), 
-                               symbol = mapIds(ensdb, keys = rownames(counts), keytype = "GENEID", column = "SYMBOL"),
+                               symbol = mapIds(EnsDb.Mmusculus.v79, keys = rownames(counts), keytype = "GENEID", column = "SYMBOL"),
                                row.names = rownames(counts))
             
             cell <- data.frame(cell_ids = colnames(counts),
@@ -75,7 +76,7 @@ harmonizeSCE <- function(sce_list, method, ...){
             counts <- rbind(counts(sce_list[[name]]), dif_mat)
             
             gene <- data.frame(ensembl = rownames(counts), 
-                               symbol = mapIds(ensdb, keys = rownames(counts), keytype = "GENEID", column = "SYMBOL"),
+                               symbol = mapIds(EnsDb.Mmusculus.v79, keys = rownames(counts), keytype = "GENEID", column = "SYMBOL"),
                                row.names = rownames(counts))
             
             geo_accession <- c("dev_cell" = "GSE129798", 
