@@ -80,7 +80,7 @@ harmonizeSCE <- function(sce_list, method, ...){
             
             geo_accession <- c("dev_cell" = "GSE129798", 
                                "glomer" = "GSE146912", 
-                               "drg" = "GSE175421", 
+                               "drg" = "GSE175421",
                                "sym" = "GSE78845")
             cell <- data.frame(cell_ids = colnames(counts),
                                cell_type = colData(sce_list[[name]])$cell_type,
