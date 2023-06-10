@@ -1,5 +1,5 @@
 ---
-title: "04 neurons data SRP135960"
+title: "04 neurons data"
 author: "YinCY"
 date: "2023-03-01"
 output: html_document
@@ -46,6 +46,7 @@ samples <- str_extract_between(basename(files), pattern1 = "_", pattern2 = "\\."
                                which_pattern1 = "first", which_pattern2 = "first") %>% 
     gsub("rep", "", .)
 ```
+
 
 ```{r}
 # drg counts table
@@ -158,18 +159,41 @@ library(PCAtools)
 set.seed(103)
 npcs <- calculatePCA(x = logcounts(drg_sce), subset_row = hvgs)
 elbow <- findElbowPoint(attr(npcs, "percentVar"))
-reducedDim(drg_sce, "PCA") <- npcs[, 1:elbow]
+reducedDim(drg_sce, "PCA") <- npcs[, 1:10]
 plot(attr(npcs, "percentVar"))
 
 set.seed(104)
 drg_sce <- runTSNE(drg_sce, dimred = "PCA", perplexity = 20)
-drg_sce %>% colData
 
-source("R/idconv.R")
+# clusters
+library(bluster)
+set.seed(105)
+clusters <- clusterRows(reducedDim(drg_sce, "PCA"), 
+                        BLUSPARAM = NNGraphParam(k = 30))
+clusters %>% table
+colData(drg_sce)$clusters <- clusters
+
+colData(drg_sce)$cell_type <- sapply(colData(drg_sce)$clusters, 
+                                        FUN = function(x){
+                                            switch(x, 
+                                                   "1" = "Sensory Neurons", 
+                                                   "2" = "Satellite Glia B", 
+                                                   "3" = "Sensory Neurons", 
+                                                   "4" = "Satellite Glia A", 
+                                                   "5" = "Satellite Glia A", 
+                                                   "6" = "Schwann Cells", 
+                                                   "7" = "Schwann Cells", 
+                                                   "8" = "Spinal Endothelial", 
+                                                   "9" = "Sensory Neurons", 
+                                                   "10" = "Spinal Endothelial")
+                                        })
+colData(drg_sce)$cell_type %>% table
+source("functions/idconv.R")
 plotTSNE(drg_sce, 
          colour_by = "cell_type",
          # colour_by = idconv("Calca"),
-         point_size = 0.5)
+         point_size = 0.5, 
+         text_by = "cell_type")
 saveRDS(drg_sce, "../data/kidney/kidney-map/GSE175421/drg_sce.rds")
 ```
 

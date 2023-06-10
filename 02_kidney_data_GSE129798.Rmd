@@ -572,7 +572,6 @@ saveRDS(dev_cell_sce, "../data/kidney/kidney-map/GSE129798/dev_cell_sce.rds")
 ```
 
 
-# the below codes are deprived
 
 ## annotate region information
 ```{r}

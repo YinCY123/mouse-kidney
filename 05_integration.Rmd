@@ -43,7 +43,7 @@ sample_meta <- data.frame(
 rownames(sample_meta) <- sample_meta$cell_ids
 sample_meta
 
-source("R/harmoniseSCE.R")
+source("functions/harmoniseSCE.R")
 counts <- harmonizeSCE(sce_list = list(drg_sce, sym_sce, glomer_sce, dev_cell_sce), method = "harmony")
 
 library(AnnotationHub)
@@ -74,7 +74,7 @@ set.seed(102)
 npcs <- calculatePCA(sces, subset_row = hvgs)
 library(PCAtools)
 elbow <- findElbowPoint(attr(npcs, "percentVar"))
-reducedDim(sces, "PCA") <- npcs[, 1:40]
+reducedDim(sces, "PCA") <- npcs[, 1:50]
 
 set.seed(103)
 sces <- RunHarmony(object = sces, 
@@ -85,13 +85,10 @@ sces <- RunHarmony(object = sces,
 set.seed(104)
 sces <- runTSNE(sces, dimred = "harmony")
 
-# set.seed(105)
-# sces <- runUMAP(sces, dimred = "harmony")
-
 
 library(viridis)
 plotTSNE(sces, 
-         colour_by = "geo_accession", 
+         colour_by = "cell_type", 
          point_size = 0.05, 
          text_by = "cell_type", 
          text_size = 1.5) +
@@ -101,9 +98,6 @@ plotTSNE(sces,
 
 
 ggsave("figures/harmony_TSNE_cell_type.pdf")
-ggsave("figures/harmony_TSNE_location.pdf")
-ggsave("figures/harmony_TSNE_datasets.pdf")
-
 saveRDS(sces, "../data/kidney/kidney-map/integrated_data/harmonized_integrated.rds")
 ```
 
@@ -134,10 +128,7 @@ sces <- createRISC(sce_list = sces)
 
 rm(dev_cell_sce, drg_sce, sym_sce, glomer_sce)
 gc()
-```
 
-
-```{r}
 pro <- function(x, ...){
         # do not filtering, is been done
         x <- scFilter(x,min.UMI = 0, max.UMI = Inf, min.gene = 0, 
@@ -175,17 +166,28 @@ saveRDS(sces, "../data/kidney/kidney-map/integrated_data/RISC_integrated.rds")
 
 
 library(ggplot2)
+library(patchwork)
 DimPlot(sces, 
         slot = "cell.tsne", 
+<<<<<<< HEAD
         # colFactor = "mito_percent", 
         colFactor = "mito_percent",
         label = F, 
         # label.font = 2, 
+=======
+        colFactor = "cell_type", 
+        label = T, 
+        label.font = 2, 
+>>>>>>> b02cb0408f3c8e5d545c344ee5979ed51e8c5795
         adjust.label = 0) +
-    theme(legend.position = "none")
+    theme(legend.position = "none") 
 
 
+<<<<<<< HEAD
 ggsave("results/figures/RISC_TSNE_location.pdf")
+=======
+saveRDS(p, "results/figures/RISC_TSNE_location.rds")
+>>>>>>> b02cb0408f3c8e5d545c344ee5979ed51e8c5795
 ```
 
 
@@ -197,6 +199,7 @@ library(scran)
 library(batchelor)
 library(scater)
 library(dplyr)
+library(bluster)
 
 
 sym_sce <- readRDS("../data/kidney/kidney-map/GSE78845/sym_sce.rds")
@@ -206,8 +209,8 @@ dev_cell_sce <- readRDS("../data/kidney/kidney-map/GSE129798/dev_cell_sce.rds")
 
 sces <- list(dev_cell = dev_cell_sce, 
              glomer = glomer_sce, 
-             sym = sym_sce,
-             drg = drg_sce)
+             drg = drg_sce, 
+             sym = sym_sce)
 
 source("functions/harmoniseSCE.R")
 sces <- harmonizeSCE(sces, method = "fastMNN")
@@ -219,6 +222,10 @@ set.seed(102)
 dec_list <- lapply(sces, modelGeneVar)
 combined_dec <- combineVar(dec_list[[1]], dec_list[[2]], dec_list[[3]], dec_list[[4]])
 hvgs <- getTopHVGs(combined_dec, n = 3000)
+
+# for findMarkers
+hvgs1 <- getTopHVGs(combined_dec, n = 5000)
+saveRDS(hvgs1, "../data/kidney/kidney-map/integrated_data/hvgs.rds")
 hvgs %>% str
 
 rm(dev_cell_sce, glomer_sce, drg_sce, sym_sce)
@@ -237,35 +244,570 @@ set.seed(104)
 combined_sces <- runTSNE(combined_sces, 
                          dimred = "corrected", 
                          perplexity = 30)
-# saveRDS(combined_sces, "../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+
+plotTSNE(combined_sces, 
+         colour_by = "cell_type",
+         # colour_by = idconv("Cd209a"),
+         text_by = "cell_type", 
+         text_size = 2,
+         point_size = 0.2) +
+    theme(legend.position = "none")
+```
+
+
+## clustering
+```{r}
+set.seed(105)
+clusters <- clusterRows(x = reducedDim(combined_sces, "TSNE"), 
+                        BLUSPARAM = NNGraphParam(k = 25, 
+                                                 cluster.fun = "walktrap", 
+                                                 cluster.args = list(steps = 5)))
+clusters %>% table
+combined_sces$clusters <- factor(clusters)
+
+library(patchwork)
+source("functions/idconv.R")
+plotTSNE(combined_sces, 
+         colour_by = "clusters", 
+         text_by = "clusters", 
+         text_size = 2,
+         point_size = 0.2) +
+    theme(legend.position = "none")  +
+
+plotTSNE(combined_sces, 
+         # colour_by = "cell_type",
+         colour_by = idconv("Cp"),
+         text_by = "cell_type", 
+         text_size = 2,
+         point_size = 0.2) +
+    theme(legend.position = "none")
+
+ggsave("cell_annotation.pdf", width = 10)
 ```
 
 
 ```{r}
-library(ggplot2)
-library(scater)
-library(ggrepel)
+for( n in unique(colData(combined_sces)$clusters)){
+    my_color <- rep("grey", length(colData(combined_sces)$clusters))
+    names(my_color) <- as.character(colData(combined_sces)$clusters)
+    my_color[colData(combined_sces)$clusters == n] <- "red"
+    
+    plotReducedDim(object = combined_sces, 
+                   dimred = "TSNE", 
+                   colour_by = "clusters", 
+                   text_by = "clusters", 
+                   point_size = 0.2, 
+                   text_size = 2.5) +
+        scale_color_manual(values = my_color) +
+        guides(colour = guide_legend(override.aes = list(size = 2)))
+    
+    ggsave(paste0("sces/the-", n, "-cluster.pdf"))
+}
 
-cell_location <- colData(combined_sces) %>% as.data.frame() %>% cbind(reducedDim(combined_sces, 2)) %>% 
-    group_by(cell_type) %>% 
-    summarise(x = median(TSNE1), 
-              y = median(TSNE2))
-
-combined_sces$location <- factor(combined_sces$location, levels = c("Cortex", "outer medulla", "inner medulla", "Spine"))
-
-ggcells(combined_sces, aes(TSNE.1, TSNE.2)) +
-    geom_point(aes(colour = mito_percent), size = 0.5, alpha = 1/2, show.legend = T) +
-    geom_text_repel(data = cell_location, aes(x, y, label = cell_type), size = 2.5) +
-    viridis::scale_color_viridis(name = "mitochondrial \npercentage", 
-                                 discrete = F, 
-                                 breaks = c(0, 25, 50, 75),
-                                 labels = paste(c(0, 25, 50, 75), "%", sep = "")) +
-    theme_classic() +
-    # theme(legend.position = "none")
-    guides(colour = guide_legend(override.aes = list(alpha = 1, size = 3)))
+table(combined_sces$cell_type, combined_sces$clusters) %>% as.matrix()  %>% t
+```
 
 
-ggsave("results/figures/fastMNN_mito_percent.pdf")
+```{r}
+markers <- list(
+    endothelia = c("Cdh5", "Pecam1", "Kdr", "Nrp1"), 
+    macrophage = c("C1qa", "C1qb", "C1qc", "Cx3cr1", "Lyz2"), 
+    T_cell = c("Thy1", "Cd3g", "Cd3d"), 
+    B_cell = c("Cd79a", "Cd79b"),
+    NK = c("Tyrobp"), 
+    DC = c("H2-Eb1", "H2-Ab1"),
+    Monocytes = c("Csf1r"),
+    VSMC = c("Cnn1"), 
+    pericyte = c("Cspg4"), 
+    Fibroblast = c("Dcn"), 
+    PTS1 = c("Slc5a2", "Slc5a12", "Slc7a7", "Spp2", "Slc6a19", "Slc22a29"),
+    PTS2 = c("Fxyd2", "Hrsp12"), 
+    PTS3 = c("Atp11a", "Slc13a3", "Slc27a2"),
+    CD_IC = c("Atp6v1g3", "Slc4a1", "Aqp6", "Slc26a4", "Hmx2"),
+    CD_PC = c("Hsd11b2", "Aqp4", "Aqp2"),
+    DCT = c("Pvalb", "Slc12a3"),
+    LOH = c("Clcnka", "Slc12a1", "Umod", "Sptssb"), 
+    LOH_DTL1 = c("Lbp"), 
+    LOH_DTL2 = c("Aqp1", "Slc39a8", "Tspan6", "Nr2e3"), 
+    LOH_DTL3 = c("Aqp1, Osr2"), 
+    LOH_ATL = c("Sptssb"),
+    LOH_MTAL = c("Clcnka", "Umod", "Slc12a1", "Pcsk6", "Tmem207", "Kcnt1"),
+    LOH_CTAL = c("Shd", "Dusp9", "Rab6b", "Rps6ka6", "Fgf9"),
+    CNT = c("Kcne1", "S100g"), 
+    CCD = c("Calb1", "Slc4a1", "Pth1r", "Hmx2", "Insrr"),
+    OMCD = c("Aqp2", "Aqp4", "Hsd11b2", "Slc4a1", "Slc26a7"), 
+    IMCD = c("Wnt4", "Aqp2", "Aqp4"),
+    Sensory = c("Calca"), 
+    Sympathetic = c("Dbh", "Th")
+)
+```
+
+
+```{r}
+source("functions/idconv.R")
+plotTSNE(combined_sces, 
+         # colour_by = idconv("Cdh5"),
+         colour_by = "geo_accession",
+         text_by = "clusters", 
+         text_size = 2,
+         point_size = 0.2) +
+    theme(legend.position = "none")
+```
+
+
+## annotation cell types
+```{r}
+library(SingleR)
+library(magrittr)
+
+ref_mouse_tubule_sce <- readRDS("../data/kidney/kidney-map/GSE150338/ref_mouse_tubule_sce.rds")
+agg_combined_sces <- aggregateAcrossCells(combined_sces, 
+                                          ids = combined_sces$clusters, 
+                                          statistics = "sum", 
+                                          use.assay.type = "logcounts")
+
+set.seed(109)
+tubule_pred <- SingleR(test = agg_combined_sces, 
+                       ref = ref_mouse_tubule_sce, 
+                       labels = ref_mouse_tubule_sce$cell_type, 
+                       assay.type.test = "logcounts", 
+                       assay.type.ref = "tpm", 
+                       de.method = "classic")
+
+tubule_pred$labels %>% table
+cs <- rownames(tubule_pred)
+```
+
+```{r}
+pdf("tubule_pre.pdf")
+tubule_pred$scores %>% as.data.frame(row.names = cs) %>% as.matrix() %>% 
+    pheatmap::pheatmap(angle_col = 315, 
+                       cluster_cols = T, 
+                       show_rownames = T,
+                       show_colnames = T,
+                       color = viridis::viridis(n = 1000, option = "H"), 
+                       fontsize_row = 5, 
+                       display_numbers = TRUE, 
+                       fontsize_number = 4, 
+                       number_format = "%.3f")
+dev.off()
+
+```
+
+
+## sub clusters
+```{r}
+# 31,53:  NK, Cd4 T, Cd8 T 
+
+c31_53 <- combined_sces[, combined_sces$clusters %in% c(31, 53)]
+hvgs <- c("ENSMUSG00000032094", "ENSMUSG00000002033", 
+          "ENSMUSG00000030579", "ENSMUSG00000023274", 
+          "ENSMUSG00000053977", "ENSMUSG00000053044")
+
+
+set.seed(101)
+c31_53 <- runPCA(c31_53, 
+              subset_row = hvgs, 
+              ncomponents = 4)
+
+set.seed(102)
+c31_53 <- runTSNE(c31_53, dimred = "PCA", preplexity = 30)
+
+set.seed(103)
+c31_53_clusters <- clusterRows(reducedDim(c31_53, "PCA"), 
+                            BLUSPARAM = NNGraphParam(k = 50))
+c31_53_clusters %>% table
+colLabels(c31_53) <- c31_53_clusters
+
+colLabels(c31_53) <- sapply(c31_53_clusters, FUN = function(x){
+  switch(as.character(x), 
+         "1" = "2",
+         "2" = "2", 
+         "3" = "1", 
+         "4" = "2", 
+         "5" = "3", 
+         "6" = "2")
+})
+# 1 NK: 3
+# 2 Cd4 T Cells: 1, 2, 4, 6
+# 3 Cd8 T Cells: 5
+
+colLabels(c31_53) <- paste("31_53.",colLabels(c31_53), sep = "") 
+
+labels <- as.character(combined_sces$clusters)
+labels[labels %in% c(31, 53)] <- colLabels(c31_53)
+combined_sces$clusters <- labels
+
+source("functions/idconv.R")
+library(patchwork)
+plotTSNE(c31_53, 
+         colour_by = "label",
+         text_by = "label") +
+plotTSNE(c31_53, 
+         # colour_by = "label",
+         colour_by = idconv("Cd4"),
+         text_by = "label")
+```
+
+
+```{r}
+# CD_IC: CCD_IC, OMCD_IC, IMCD_IC
+library(readxl)
+
+c27_41 <- combined_sces[, combined_sces$clusters %in% c(27, 41)]
+ccd <- read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                  sheet = "CCD_797") %>% 
+    dplyr::filter(FDR < 0.01) %>% 
+    dplyr::pull(Gene_id)
+omcd <- read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                  sheet = "OMCD_757") %>% 
+    dplyr::filter(FDR < 0.01) %>% 
+    dplyr::pull(Gene_id)
+imcd <- read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                  sheet = "IMCD_1951") %>% 
+    dplyr::filter(FDR < 0.01) %>% 
+    dplyr::pull(Gene_id)
+
+hvgs <- unique(c(ccd, omcd, imcd))
+hvgs <- hvgs[hvgs %in% rownames(c27_41)]
+
+set.seed(101)
+c27_41 <- runPCA(c27_41, 
+              subset_row = hvgs, 
+              ncomponents = 4)
+
+set.seed(102)
+c27_41 <- runTSNE(c27_41, dimred = "PCA", preplexity = 30)
+
+set.seed(103)
+c27_41_clusters <- clusterRows(reducedDim(c27_41, "PCA"), 
+                            BLUSPARAM = NNGraphParam(k = 50))
+c27_41_clusters %>% table
+colLabels(c27_41) <- c27_41_clusters
+
+# 1:CCD_IC, 2: IMCD_IC, 3: OMCD_IC
+# Hmx2, Slc26a4, Insrr, Slc4a1,  Aqp6, Kit
+colLabels(c27_41) <- paste("27_41.",colLabels(c27_41), sep = "")
+
+labels <- as.character(combined_sces$clusters)
+labels[labels %in% c(27, 41)] <- colLabels(c27_41)
+combined_sces$clusters <- labels
+
+
+plotTSNE(c27_41, 
+         # colour_by = "label",
+         colour_by = "label",
+         text_by = "label") 
+
+plotTSNE(c27_41, 
+         colour_by = idconv("Hba-a2"),
+         # colour_by = "",
+         text_by = "label")
+```
+
+
+```{r}
+# LOH: LOH_DTL1, LOH_DTL2, LOH_DTL3, LOH_ATL
+cs <- combined_sces[, combined_sces$clusters %in% c(10, 29, 43, 51, 54, 71)]
+dtl1 <- read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                   sheet = "DTL1_555") %>% 
+    dplyr::filter(FDR < 0.01) %>% 
+    dplyr::pull(Gene_id)
+dtl2 <- read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                   sheet = "DTL2_682") %>% 
+    dplyr::filter(FDR < 0.01) %>% 
+    dplyr::pull(Gene_id)
+dtl3 <- read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                   sheet = "DTL3_282") %>% 
+    dplyr::filter(FDR < 0.01) %>% 
+    dplyr::pull(Gene_id)
+atl <- read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                   sheet = "ATL_824") %>% 
+    dplyr::filter(FDR < 0.01) %>% 
+    dplyr::pull(Gene_id)
+
+hvgs <- unique(c(dtl1, dtl2, dtl3, atl))
+hvgs <- hvgs[hvgs %in% rownames(cs)]
+
+set.seed(101)
+cs <- runPCA(cs, 
+              subset_row = hvgs, 
+              ncomponents = 20)
+
+set.seed(102)
+cs <- runTSNE(cs, dimred = "PCA", preplexity = 30)
+
+set.seed(103)
+cs_clusters <- clusterRows(reducedDim(cs, "PCA"), 
+                            BLUSPARAM = NNGraphParam(k = 20))
+cs_clusters %>% table
+colLabels(cs) <- cs_clusters
+
+# 1 DTL1: 1, 5
+# Slc14a2
+# 2 DTL2: 2
+# 3 DTL3: 3
+# Aqp1
+# 4 ATL: 4, 6, 7
+# Sptssb
+
+colLabels(cs) <- sapply(cs_clusters, FUN = function(x){
+  switch(as.character(x), 
+         "1" = "1",
+         "2" = "2", 
+         "3" = "3", 
+         "4" = "4", 
+         "5" = "1", 
+         "6" = "4", 
+         "7" = "4")
+})
+
+colLabels(cs) <- paste("10_71.",colLabels(cs), sep = "") 
+
+labels <- as.character(combined_sces$clusters)
+labels[labels %in% c(10, 29, 43, 51, 54, 71)] <- colLabels(cs)
+combined_sces$clusters <- labels
+
+plotTSNE(cs, 
+         colour_by = "label",
+         # colour_by = "",
+         text_by = "label") +
+
+plotTSNE(cs, 
+         colour_by = idconv("Slc14a2"),
+         # colour_by = "",
+         text_by = "label")
+```
+
+
+```{r}
+# LOH: LOH_MTAL, LOH_CTAL
+cs <- combined_sces[, combined_sces$clusters %in% c(14, 60, 70)]
+mtal <- read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                   sheet = "MTAL_1020") %>% 
+    dplyr::filter(FDR < 0.01) %>% 
+    dplyr::pull("Gene_id")
+ctal <- read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                   sheet = "CTAL_1092") %>% 
+    dplyr::filter(FDR < 0.01) %>% 
+    dplyr::pull(Gene_id)
+
+hvgs <- unique(c(mtal, ctal))
+hvgs <- hvgs[hvgs %in% rownames(cs)]
+
+set.seed(101)
+cs <- runPCA(cs, 
+              subset_row = hvgs, 
+              ncomponents = 20)
+
+set.seed(102)
+cs <- runTSNE(cs, dimred = "PCA", preplexity = 30)
+
+set.seed(103)
+cs_clusters <- clusterRows(reducedDim(cs, "PCA"), 
+                            BLUSPARAM = NNGraphParam(k = 20))
+cs_clusters %>% table
+colLabels(cs) <- cs_clusters
+
+# 1 MATL: 1, 2
+# 2 CTAL: 3, 4
+
+colLabels(cs) <- sapply(cs_clusters, FUN = function(x){
+  switch(as.character(x), 
+         "1" = "1",
+         "2" = "1", 
+         "3" = "2", 
+         "4" = "2")
+})
+
+colLabels(cs) <- paste("14_70.",colLabels(cs), sep = "") 
+
+labels <- as.character(combined_sces$clusters)
+labels[labels %in% c(14, 60, 70)] <- colLabels(cs)
+combined_sces$clusters <- labels
+
+
+library(patchwork)
+plotTSNE(cs, 
+         colour_by = "label",
+         # colour_by = "",
+         text_by = "label") 
+
+plotTSNE(cs, 
+         colour_by = idconv("Shd"),
+         # colour_by = "",
+         text_by = "label")
+```
+
+
+```{r, message=FALSE}
+# DCT CCD_PC, OMCD_PC, IMCD_PC: 8, 13, 25 33, 45, 63
+cs <- combined_sces[, combined_sces$clusters %in% c(8, 13, 25, 33, 45, 63)]
+
+cnt <- read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                  sheet = "CNT_503") %>% 
+    dplyr::filter(FDR < 0.1) %>% 
+    dplyr::pull(Gene_id)
+
+ccd <- read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                  sheet = "CCD_797") %>% 
+    dplyr::filter(FDR < 0.1) %>% 
+    dplyr::pull(Gene_id)
+
+omcd <- read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                   sheet = "OMCD_757") %>% 
+    dplyr::filter(FDR < 0.1) %>% 
+    dplyr::pull(Gene_id)
+
+imcd <- read_excel("../data/kidney/kidney-map/GSE150338/supplementary_files/ASN.2020101406SupplementaryData4.xlsx", 
+                   sheet = "IMCD_1951") %>% 
+    dplyr::filter(FDR < 0.1) %>% 
+    dplyr::pull(Gene_id)
+
+hvgs <- unique(c(cnt, ccd, omcd, imcd))
+hvgs <- hvgs[hvgs %in% rownames(cs)]
+
+set.seed(101)
+cs <- runPCA(cs, 
+              subset_row = hvgs, 
+              ncomponents = 20)
+
+set.seed(102)
+cs <- runTSNE(cs, dimred = "PCA", preplexity = 30)
+
+set.seed(103)
+cs_clusters <- clusterRows(reducedDim(cs, "PCA"), 
+                            BLUSPARAM = NNGraphParam(k = 10, cluster.fun = "louvain"))
+cs_clusters %>% table
+colLabels(cs) <- cs_clusters
+
+
+# 1 CNT: 1, 2
+# 2 CCD_PC: 3, 4, 5
+# 3 OMCD_PC: 6
+# 4 IMCD_PC: 7, 8
+# 5 Slc14a2, Calb1, Wnt4
+
+colLabels(cs) <- sapply(cs_clusters, FUN = function(x){
+  switch(as.character(x), 
+         "1" = "1",
+         "2" = "1", 
+         "3" = "2", 
+         "4" = "2", 
+         "5" = "2", 
+         "6" = "3", 
+         "7" = "4", 
+         "8" = "4")
+})
+
+colLabels(cs) <- paste("8_63.",colLabels(cs), sep = "") 
+
+labels <- as.character(combined_sces$clusters)
+labels[labels %in% c(8, 13, 25, 33, 45, 63)] <- colLabels(cs)
+combined_sces$clusters <- labels
+
+
+library(patchwork)
+plotTSNE(cs, 
+         colour_by = "label", 
+         text_by = "label", 
+         point_size = 1) +
+
+plotTSNE(cs, 
+         colour_by = idconv("Stc1"), 
+         text_by = "label", 
+         point_size = 0.5)
+```
+
+
+```{r}
+cell_type_annotation <- c(
+    "1" = "Fibroblast",
+    "2" = "Afferent/Efferent Endothelial",
+    "3" = "Endothelial",
+    "4" = "Parietal Epithelial",
+    "5" = "Dendritic Cells",
+    "6" = "PTS1",
+    "7" = "Schwann Cells",
+    "8_63.1" = "CNT",
+    "8_63.2" = "CCD_PC",
+    "8_63.3" = "OMCD_PC",
+    "8_63.4" = "IMCD_PC",
+    "9" = "Endothelial",
+    "10_71.1" = "LOH_DTL1",
+    "10_71.2" = "LOH_DTL2",
+    "10_71.3" = "LOH_DTL3",
+    "10_71.4" = "LOH_ATL",
+    "11" = "Podocytes",
+    "12" = "Glomerular Endothelial",
+    "14_70.1" = "LOH_MTAL",
+    "14_70.2" = "LOH_CTAL",
+    "15" = "Satellite Glia A",
+    "16" = "DCT",
+    "17" = "PTS3",
+    "18" = "Satellite Glia B",
+    "19" = "Macrophages",
+    "20" = "Spinal Endothelial",
+    "21" = "Endothelial",
+    "22" = "Mesangial Cells A",
+    "23" = "B Cells",
+    "24" = "Satellite Glia A",
+    "26" = "Macrophages",
+    "27_41.1" = "CCD_IC",
+    "27_41.2" = "IMCD_IC",
+    "27_41.3" = "OMCD_IC",
+    "28" = "PTS2",
+    "30" = "Sensory Neurons",
+    "31_53.1" = "NK Cells",
+    "31_53.2" = "Cd4 T Cells",
+    "31_53.3" = "Cd8 T Cells",
+    "32" = "Monocytes",
+    "34" = "PTS1",
+    "35" = "Macrophages",
+    "36" = "PTS1",
+    "37" = "DCT",
+    "38" = "Mesangial Cells B",
+    "39" = "Pericytes",
+    "40" = "Afferent/Efferent Endothelial",
+    "42" = "Sensory Neurons",
+    "44" = "Endothelial",
+    "46" = "Satellite Glia A",
+    "47" = "DCT",
+    "48" = "Sensory Neurons",
+    "49" = "VSMC",
+    "50" = "Glomerular Endothelial",
+    "52" = "Sympathetic Neurons",
+    "55" = "Sensory Neurons",
+    "56" = "Monocytes",
+    "57" = "Podocytes",
+    "58" = "Podocytes",
+    "59" = "doublets",
+    "61" = "Sensory Neurons",
+    "62" = "Mesangial Cells A",
+    "64" = "Schwann Cells",
+    "65" = "VSMC",
+    "66" = "Sensory Neurons",
+    "67" = "Sensory Neurons",
+    "68" = "PTS2",
+    "69" = "doublets",
+    "72" = "doublets",
+    "73" = "doublets",
+    "74" = "doublets"
+)
+
+cell_type_annotation
+combined_sces$cell_type <- cell_type_annotation[combined_sces$clusters]
+combined_sces$cell_type %>% table(useNA = "ifany")
+combined_sces <- combined_sces[, combined_sces$cell_type != "doublets"]
+
+saveRDS(combined_sces, "../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+
+plotTSNE(combined_sces, 
+         colour_by = "cell_type", 
+         text_by = "cell_type", 
+         point_size = 0.2, 
+         text_size = 2) +
+    theme(legend.position = "none")
 ```
 
 
