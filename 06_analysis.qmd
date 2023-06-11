@@ -486,7 +486,7 @@ fwrite(lc,
 
 meta_file <- colData(sces) %>% as.data.frame() %>% 
     dplyr::rename("Cell" = "cell_ids") %>% 
-    dplyr::select(Cell, cell_type) %>% 
+    dplyr::select(Cell, level3_cluster) %>% 
     magrittr::set_colnames(value = c("cell", "cell_type"))
 
 write.table(meta_file, 
@@ -1278,7 +1278,7 @@ dev.off()
 
 
 # neurons expressed top 10 liagnds, receptors and there's interaction with other cells
-## neurons expressed ligands
+## neurons top ligand's receptors expression across cell types
 ```{r}
 library(scuttle)
 library(tidyr)
@@ -1296,7 +1296,7 @@ ligands_expressed_by_neurons_ids <- ((means_long$receptor_a == "False" & means_l
 
 ligands_expressed_by_neurons <- means_long[ligands_expressed_by_neurons_ids, ]
 
-# place receptors into the first column and ligands to the second column
+# place receptors into the first column ligands to the second column
 ligands_expressed_by_neurons <- ligands_expressed_by_neurons %>% 
     rowwise() %>% 
     mutate(cell_a_receptor = ifelse(receptor_a == "True", cell_a, cell_b), 
@@ -1310,81 +1310,127 @@ ligands_expressed_by_neurons <- ligands_expressed_by_neurons %>%
     dplyr::relocate(cell_b_ligand, .before = 2) 
 
 complex_input <- read.csv("../data/cellphonedb/v4.1.0/complex_input.csv") %>% tibble::column_to_rownames("complex_name")
+
+# convert ligand gene id to symbol id
 neurons_ligands <- ligands_expressed_by_neurons %>% 
     rowwise() %>% 
     mutate(gene_b_ligand = ifelse(grepl("^complex:", partner_b_ligand), 
-                                  complex_input[gsub("^complex:", "", partner_b_ligand), 1:5, drop = F] %>% apply(1, str_c, collapse = ",") %>% str_replace(",{1,}$", ""), 
+                                  complex_input[gsub("^complex:", "", partner_b_ligand), 1:5, drop = F] %>% 
+                                      apply(1, str_c, collapse = ",") %>% 
+                                      str_replace(",{1,}$", ""), 
                                   gene_b_ligand))
 
 source("functions/idconv.R")
 neurons_ligands <- neurons_ligands %>% rowwise() %>% 
-    mutate(gene_b_ligand = ifelse(grepl("^ENS", gene_b_ligand), 
-                                  gene_b_ligand, 
+    mutate(gene_b_ligand = ifelse(grepl("^ENSG", gene_b_ligand), 
+                                  idconv(gene_b_ligand, from_type = "GENEID", to_type = "SYMBOL", db = "human"), 
                                   str_split(gene_b_ligand, ",") %>% 
-                                      sapply(function(x){idconv(x, from_type = "UNIPROTID", to_type = "GENEID", db = "human")}) %>% 
+                                      sapply(function(x){idconv(x, from_type = "UNIPROTID", to_type = "SYMBOL", db = "human")}) %>% 
                                       str_c(collapse = ",")))
 
-# convert CEL symbol to ENSG00000170835 geneid
-neurons_ligands$gene_b_ligand <- ifelse(is.na(neurons_ligands$gene_b_ligand), "ENSG00000170835", neurons_ligands$gene_b_ligand)
-saveRDS(neurons_ligands, "../data/kidney/kidney-map/results/cell_cell_communication/neurons_ligands.rds")
-
-
-
-sces_human <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated_human.rds")
-# the neurons expressed ligands include organic moleculars, it concentration is proxyed by it's enzyme's expressed level.
-# if it's a complex the expressed level is multiple gene's mean expression.
-neurons_ligands <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/neurons_ligands.rds")
-neurons_ligands <- neurons_ligands %>% 
-    unite(col = "cell_pair_ids", cell_b_ligand, partner_b_ligand, cell_a_receptor, partner_a_receptor, sep = "@", remove = F) 
-
 neurons_ligands %>% dplyr::filter(is.na(gene_b_ligand))
+neurons_ligands %>% dplyr::filter(grepl("^ENSG", gene_b_ligand))
+# manually convert CEL uniprot id to symbol id, this conversion was failed
+neurons_ligands$gene_b_ligand <- ifelse(is.na(neurons_ligands$gene_b_ligand), "CEL", neurons_ligands$gene_b_ligand)
 
 
-ligand_list <- split(neurons_ligands$gene_b_ligand, neurons_ligands$cell_pair_ids) %>% 
-    sapply(function(x){str_split(x, ",")})
+# convert receptors gene id to symbol id
+neurons_ligands <- neurons_ligands %>% 
+    rowwise() %>% 
+    mutate(gene_a_receptor = ifelse(grepl("^complex:", partner_a_receptor), 
+                                    complex_input[gsub("^complex:", "", partner_a_receptor), 1:5, drop = F] %>% 
+                                        apply(1, str_c, collapse = ",") %>% 
+                                        str_replace(",{1,}$", ""),  
+                                    gene_a_receptor))
 
-source("functions/idconv.R")
-ligand_list <- ligand_list %>% sapply(function(x){idconv(x, from_type = "GENEID", to_type = "SYMBOL", db = "human")})
+neurons_ligands <- neurons_ligands %>% 
+    rowwise() %>% 
+    mutate(gene_a_receptor = ifelse(grepl("^ENSG", gene_a_receptor), 
+                                    idconv(gene_a_receptor, from_type = "GENEID", to_type = "SYMBOL", db = "human"), 
+                                    str_split(gene_a_receptor, ",") %>% 
+                                        sapply(function(x){idconv(x, from_type = "UNIPROTID", to_type = "SYMBOL", db = "human")} %>% 
+                                                   str_c(collapse = ","))))
 
-# check if there any unsuccessful conversion
-ligand_list %>% sapply(function(x){all(is.na(x))}) %>% table
-# ligand_list <- ligand_list %>% lapply(function(x){na.omit(x)})
-
-saveRDS(ligand_list, "../data/kidney/kidney-map/results/cell_cell_communication/neuron_expressed_lisgand_list.rds")
-ligand_list <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/neuron_expressed_lisgand_list.rds")
-
-ligand_expression_list <- vector(mode = "list", length = length(ligand_list))
-names(ligand_expression_list) <- names(ligand_list)
-
-for(name in names(ligand_expression_list)){
-    try(ligand_expression_list[[name]] <- makePerCellDF(sces_human[, sces_human$level3_cluster == str_extract(name, "Sympathetic Neurons|Sensory Neurons")], 
-                                                        features = ligand_list[[name]]) %>% 
-        pivot_longer(cols = -c(1:11), names_to = "symbol", values_to = "logcounts") %>% 
-            dplyr::pull(logcounts) %>% 
-            mean %>% round(6),
-            silent = TRUE)
-}
-
-ids <- sapply(ligand_expression_list, length) == 0
-ids %>% table
-ligand_expression_list[ids] <- NULL
-neurons_ligand_expression_df <- ligand_expression_list %>% unlist() %>% 
-    as.data.frame() %>% tibble::rownames_to_column() %>% magrittr::set_colnames(value = c("cell_pair_ids", "expression"))
-left_join(neurons_ligand_expression_df, neurons_expressed_ligands, by = "cell_pair_ids") %>% 
-    arrange(-expression) %>% 
-    select(partner_b_ligand, partner_a_receptor, ex)
-
-saveRDS(ligand_expression_list, "../data/kidney/kidney-map/results/cell_cell_communication/ligand_expression_list.rds")
+neurons_ligands %>% dplyr::filter(is.na(gene_a_receptor))
+neurons_ligands %>% dplyr::filter(grepl("^ENSG", gene_a_receptor))
+# manually convert  to symbol id, this failed convert from uniprot id to symbol id
+neurons_ligands$gene_a_receptor <- ifelse(is.na(neurons_ligands$gene_a_receptor), "RYK,FZD8", neurons_ligands$gene_a_receptor)
 ```
-
 
 ```{r}
-neurons_expressed_ligands
+library(scuttle)
+library(tidyr)
+library(dplyr)
+
+# get ligands and receptors expression
+# the expression value is calculated by avarge the gene's expression across the cell
+# for complex, this is the combined mean of multiple gene's mean expression
+neurons_ligands <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/neurons_ligands.rds")
+sces_human <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated_human.rds")
+
+
+# remove not expressed pairs
+ligands <- neurons_ligands$gene_b_ligand %>% str_split(",") %>% unique
+ligands %>% str
+receptors <- neurons_ligands$gene_a_receptor %>% str_split(",") %>% unique()
+receptors %>% str
+
+ligands_ids <- sapply(ligands, function(x){
+    all(x %in% rownames(sces_human))
+})
+ligands_ids %>% table
+ligands <- ligands[ligands_ids]
+ligands <- ligands %>% sapply(str_c, collapse = ",")
+
+receptors_ids <- sapply(receptors, function(x){
+    all(x %in% rownames(sces_human))
+})
+receptors_ids %>% table
+receptors <- receptors[receptors_ids]
+receptors <- receptors %>% sapply(str_c, collapse = ",")
+neurons_ligands <- neurons_ligands %>% dplyr::filter(gene_a_receptor %in% receptors, gene_b_ligand %in% ligands)
+
+# extract ligands expression
+neurons_ligands <- neurons_ligands %>% 
+    rowwise() %>% 
+    mutate(gene_b_ligand_expression = makePerCellDF(sces_human[, sces_human$level3_cluster == cell_b_ligand], 
+                                                    features = str_split(gene_b_ligand, ",") %>% unlist, 
+                                                    use.dimred = F) %>% 
+               pivot_longer(cols = -c(1:11), names_to = "symbol", values_to = "logcounts") %>% 
+               dplyr::pull(logcounts) %>% 
+               mean %>% 
+               round(4)) %>% 
+    relocate(gene_b_ligand_expression, .after = gene_b_ligand)
+
+
+# extract receptors expression
+neurons_ligands <- neurons_ligands %>% 
+    rowwise() %>% 
+    mutate(gene_a_receptor_expression = makePerCellDF(sces_human[, sces_human$level3_cluster == cell_a_receptor], 
+                                                      features = str_split(gene_a_receptor, ",") %>% unlist, 
+                                                      use.dimred = F) %>% 
+               pivot_longer(cols = -c(1:11), names_to = "symbol", values_to = "logcounts") %>% 
+               dplyr::pull(logcounts) %>% 
+               mean %>% 
+               round(4)) %>% 
+    dplyr::relocate(gene_a_receptor_expression, .after = gene_a_receptor)
+
+saveRDS(neurons_ligands, "../data/kidney/kidney-map/results/cell_cell_communication/neurons_ligands.rds")
 ```
+
+
+### visualize neurons top ligand's receptors expression
 
 
 ## neurons expressed receptors
 ```{r}
+means_long <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/means_long.rds")
+
+# remove all secreted interactions
+means_long <- means_long %>% dplyr::filter(!(receptor_a == "False" & receptor_b == "False"))
+
+receptors_expressed_by_neurons_ids <- ((means_long$receptor_a == "True" & means_long$cell_a %in% c("Sympathetic Neurons", "Sensory Neurons")) | (means_long$receptor_b == "True" & means_long$cell_b %in% c("Sympathetic Neurons", "Sensory Neurons")))
+
 receptors_expressed_by_neurons <- means_long[receptors_expressed_by_neurons_ids, ]
 # place receptors into the first column and ligands to the second column
 receptors_expressed_by_neurons <- receptors_expressed_by_neurons %>% 
@@ -1405,25 +1451,110 @@ receptors_expressed_by_neurons <- receptors_expressed_by_neurons %>%
 receptors_expressed_by_neurons <- receptors_expressed_by_neurons %>% dplyr::filter(cell_a_receptor != cell_b_ligand)
 
 complex_input <- read.csv("../data/cellphonedb/v4.1.0/complex_input.csv") %>% tibble::column_to_rownames("complex_name")
+
+# convert receptors id to symbol id
 neurons_receptors <- receptors_expressed_by_neurons %>% 
     rowwise() %>% 
     mutate(gene_a_receptor = ifelse(grepl("^complex:", partner_a_receptor), 
                                     complex_input[gsub("^complex:", "", partner_a_receptor), 1:5, drop = F] %>% 
                                         apply(1, str_c, collapse = ",") %>% 
-                                        str_replace(",{1,}$", "") %>% 
-                                        str_split(",") %>% 
-                                        sapply(function(x){idconv(x, from_type = "UNIPROTID", to_type = "GENEID", db = "human")}) %>% 
-                                        str_c(collapse = ","), 
-                                    gene_a_receptor)) 
-saveRDS(neurons_receptors, "../data/kidney/kidney-map/results/cell_cell_communication/neurons_receptors.rds")
+                                        str_replace(",{1,}$", "") , 
+                                    gene_a_receptor))
+
+neurons_receptors <- neurons_receptors %>% 
+    rowwise() %>% 
+    mutate(gene_a_receptor = ifelse(grepl("^complex:", partner_a_receptor), 
+                                    str_split(gene_a_receptor, ",") %>% 
+                                        sapply(function(x){idconv(x, from_type = "UNIPROTID", to_type = "SYMBOL", db = "human")} %>% 
+                                                   str_c(collapse = ",")), 
+                                    gene_a_receptor))
+neurons_receptors %>% dplyr::filter(is.na(gene_a_receptor))
+# manually change NA to "RYK,FZD8", this conversion failed from uniprotid to symbol id
+neurons_receptors$gene_a_receptor <- ifelse(is.na(neurons_receptors$gene_a_receptor), "RYK,FZD8", neurons_receptors$gene_a_receptor)
 
 
 
+# convert ligands idto symbol id
+neurons_receptors <- neurons_receptors %>% 
+    rowwise() %>% 
+    mutate(gene_b_ligand = ifelse(grepl("^complex:", partner_b_ligand), 
+                                  complex_input[gsub("^complex:", "", partner_b_ligand), 1:5, drop = F] %>% 
+                                      apply(1, str_c, collapse = ",") %>% 
+                                      str_replace(",{1,}$", ""), 
+                                  gene_b_ligand))
+
+neurons_receptors <- neurons_receptors %>% 
+    rowwise() %>% 
+    mutate(gene_b_ligand = ifelse(grepl("^complex:", partner_b_ligand), 
+                                    str_split(gene_b_ligand, ",") %>% 
+                                        sapply(function(x){idconv(x, from_type = "UNIPROTID", to_type = "SYMBOL", db = "human")} %>% 
+                                                   str_c(collapse = ",")), 
+                                    gene_b_ligand))
+
+neurons_receptors %>% dplyr::filter(is.na(gene_b_ligand))
+neurons_receptors %>% dplyr::filter(grepl("^ENSG", gene_b_ligand))
+# manually change NA to CEL, this conversion failed for CEL uniprot id to symbol id
+neurons_receptors$gene_b_ligand <- ifelse(is.na(neurons_receptors$gene_b_ligand), "CEL", neurons_receptors$gene_b_ligand)
 ```
 
 
+```{r}
+library(scuttle)
+library(dplyr)
+library(tidyr)
 
-## neurons secreted
+neurons_receptors <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/neurons_receptors.rds")
+sces_human <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated_human.rds")
+
+# remove unexpressed pairs
+receptors <- neurons_receptors$gene_a_receptor %>% str_split(",") %>% unique
+ligands <- neurons_receptors$gene_b_ligand %>% str_split(",") %>% unique
+
+receptors_ids <- sapply(receptors, function(x){
+    all(x %in% rownames(sces_human))
+})
+receptors_ids %>% table
+receptors <- receptors[receptors_ids] %>% sapply(str_c, collapse = ",")
+
+ligands_ids <- sapply(ligands, function(x){
+    all(x %in% rownames(sces_human))
+})
+ligands_ids %>% table
+ligands <- ligands[ligands_ids] %>% sapply(str_c, collapse = ",")
+
+
+neurons_receptors <- neurons_receptors %>% dplyr::filter(gene_a_receptor %in% receptors & gene_b_ligand %in% ligands)
+
+# extract receptors expression
+neurons_receptors <- neurons_receptors %>% 
+    rowwise() %>% 
+    mutate(gene_a_receptor_expression = makePerCellDF(sces_human[, sces_human$level3_cluster == cell_a_receptor], 
+                                                      features = str_split(gene_a_receptor, ",") %>% unlist) %>% 
+               pivot_longer(cols = -c(1:11), names_to = "symbol", values_to = "logcounts") %>% 
+               dplyr::pull(logcounts) %>% 
+               mean %>% 
+               round(4)) %>% 
+    dplyr::relocate(gene_a_receptor_expression, .after = gene_a_receptor)
+
+
+# extract ligands expression
+neurons_receptors <- neurons_receptors[1:100, ] %>% 
+    rowwise() %>% 
+    mutate(gene_b_ligand_expression = makePerCellDF(sces_human[, sces_human$level3_cluster == cell_b_ligand], 
+                                                      features = str_split(gene_b_ligand, ",") %>% unlist) %>% 
+               pivot_longer(cols = -c(1:11), names_to = "symbol", values_to = "logcounts") %>% 
+               dplyr::pull(logcounts) %>% 
+               mean %>% 
+               round(4)) %>% 
+    dplyr::relocate(gene_b_ligand_expression, .after = gene_b_ligand)
+saveRDS(neurons_receptors, "../data/kidney/kidney-map/results/cell_cell_communication/neurons_receptors.rds")
+```
+
+
+### visualize neurons top receptors ligand's expression
+
+
+## neurons secreted proteins
 
 
 
