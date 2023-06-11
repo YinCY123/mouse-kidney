@@ -657,9 +657,8 @@ means_long
 saveRDS(means_long, "../data/kidney/kidney-map/results/cell_cell_communication/means_long.rds")
 ```
 
-
-
 ### The whole inteaction at level 3 cluster
+
 ```{r}
 #| label: whole interaction at level3
 library(stringr)
@@ -727,8 +726,6 @@ for(i in 1:40){
 }
 ```
 
-
-
 ```{r}
 library(pheatmap)
 pdf("../data/kidney/kidney-map/results/cell_cell_communication/level3_interaction_strength.pdf")
@@ -758,9 +755,10 @@ pheatmap(m_normalized_strength,
 dev.off()
 ```
 
-
 ### interaction strength
+
 #### level 1 interactions of Neurons
+
 the interaction strength is defined by:\
 1. the sum of the mean expressions of the two clusters then normalized by the total number of interactions between the two clusters\
 2. or the number of total interactions between the two populations\
@@ -800,7 +798,6 @@ write.csv(neurons_interactions_level1,
 
 # manually change Neurons to the second column
 ```
-
 
 ```{r}
 #| message: false
@@ -844,8 +841,8 @@ circos.clear()
 dev.off()
 ```
 
-
 #### level 1 interactions: sensory and sympathetic neurons
+
 ```{r}
 ns <- c(rep("Endothelium", 4), "Parietal Epithelial", rep("Proximal Tubule", 3), 
         rep("LOH", 6), rep("Distal Tubule", 2), rep("Collecting Duct", 6), 
@@ -926,6 +923,7 @@ dev.off()
 ```
 
 #### level 2 interactions
+
 ```{r}
 #| label: level 2 interactions
 # level2 interactions strength
@@ -962,7 +960,6 @@ write.csv(neurons_interactions_level2,
 # manually place neurons to the second column
 neurons_interactions_level2 <- read.csv("../data/kidney/kidney-map/results/cell_cell_communication/level2_interactions.csv")
 ```
-
 
 ```{r}
 #| message: false
@@ -1015,8 +1012,8 @@ circos.clear()
 dev.off()
 ```
 
-
 #### level 3 interactions
+
 ```{r}
 #| label: level 3 interactions
 means_long <- readRDS("../data/kidney/kidney-map/results/cpdb_outs/analysis/means_long.rds")
@@ -1044,7 +1041,6 @@ write.csv(neurons_interactions_level3,
           quote = F)
 # manually place neurons to the second column
 ```
-
 
 ```{r}
 #| message: false
@@ -1098,8 +1094,8 @@ circos.clear()
 dev.off()
 ```
 
-
 # directed interaction
+
 ```{r}
 library(dplyr)
 library(tidyr)
@@ -1168,7 +1164,6 @@ write.csv(ligands_expressed_by_neurons,
           quote = F)
 ```
 
-
 ```{r}
 library(circlize)
 library(RColorBrewer)
@@ -1220,8 +1215,6 @@ for(i in 3:5){
 circos.clear()
 dev.off()
 ```
-
-
 
 ```{r}
 library(circlize)
@@ -1275,10 +1268,10 @@ circos.clear()
 dev.off()
 ```
 
-
-
 # neurons expressed top 10 liagnds, receptors and there's interaction with other cells
+
 ## neurons top ligand's receptors expression across cell types
+
 ```{r}
 library(scuttle)
 library(tidyr)
@@ -1361,6 +1354,7 @@ neurons_ligands$gene_a_receptor <- ifelse(is.na(neurons_ligands$gene_a_receptor)
 library(scuttle)
 library(tidyr)
 library(dplyr)
+library(stringr)
 
 # get ligands and receptors expression
 # the expression value is calculated by avarge the gene's expression across the cell
@@ -1418,11 +1412,10 @@ neurons_ligands <- neurons_ligands %>%
 saveRDS(neurons_ligands, "../data/kidney/kidney-map/results/cell_cell_communication/neurons_ligands.rds")
 ```
 
-
 ### visualize neurons top ligand's receptors expression
 
-
 ## neurons expressed receptors
+
 ```{r}
 means_long <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/means_long.rds")
 
@@ -1550,23 +1543,6 @@ neurons_receptors <- neurons_receptors[1:100, ] %>%
 saveRDS(neurons_receptors, "../data/kidney/kidney-map/results/cell_cell_communication/neurons_receptors.rds")
 ```
 
-
 ### visualize neurons top receptors ligand's expression
 
-
 ## neurons secreted proteins
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
