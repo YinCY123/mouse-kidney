@@ -1557,8 +1557,10 @@ library(tidyr)
 
 neurons_top_receptors_ligands <- split(neurons_receptors, f = neurons_receptors$cell_a_receptor)
 
-neurons_top_receptors_ligands$`Sympathetic Neurons` %>% 
-    mutate(rank = rank(gene_a_receptor_expression))
+neurons_top_receptors_ligands %>% lapply(function(x){
+    transform(x, 
+              receptor_expression_order = order(gene_a_expression_order, decreasing = TRUE))
+})
 ```
 
 ## neurons secreted proteins
