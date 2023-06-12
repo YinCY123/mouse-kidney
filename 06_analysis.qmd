@@ -1414,12 +1414,11 @@ saveRDS(neurons_ligands, "../data/kidney/kidney-map/results/cell_cell_communicat
 ```
 
 ### visualize neurons top ligand's receptors expression
+
 ```{r}
 library(magrittr)
 library(dplyr)
 ```
-
-
 
 ## neurons expressed receptors
 
@@ -1497,7 +1496,6 @@ neurons_receptors %>% dplyr::filter(grepl("^ENSG", gene_b_ligand))
 neurons_receptors$gene_b_ligand <- ifelse(is.na(neurons_receptors$gene_b_ligand), "CEL", neurons_receptors$gene_b_ligand)
 ```
 
-
 ```{r}
 library(scuttle)
 library(dplyr)
@@ -1547,10 +1545,12 @@ neurons_receptors <- neurons_receptors %>%
                mean %>% 
                round(4)) %>% 
     dplyr::relocate(gene_b_ligand_expression, .after = gene_b_ligand)
+neurons_receptors <- neurons_receptors %>% dplyr::rename(interaction_pair_expression = mean_expression)
 saveRDS(neurons_receptors, "../data/kidney/kidney-map/results/cell_cell_communication/neurons_receptors.rds")
 ```
 
 ### visualize neurons top receptors ligand's expression
+
 ```{r}
 library(dplyr)
 library(tidyr)
@@ -1560,7 +1560,5 @@ neurons_top_receptors_ligands <- split(neurons_receptors, f = neurons_receptors$
 neurons_top_receptors_ligands$`Sympathetic Neurons` %>% 
     mutate(rank = rank(gene_a_receptor_expression))
 ```
-
-
 
 ## neurons secreted proteins
