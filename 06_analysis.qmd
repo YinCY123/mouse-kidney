@@ -1409,10 +1409,17 @@ neurons_ligands <- neurons_ligands %>%
                round(4)) %>% 
     dplyr::relocate(gene_a_receptor_expression, .after = gene_a_receptor)
 
+neurons_ligands <- neurons_ligands %>% rename(interaction_pair_expression = mean_expression)
 saveRDS(neurons_ligands, "../data/kidney/kidney-map/results/cell_cell_communication/neurons_ligands.rds")
 ```
 
 ### visualize neurons top ligand's receptors expression
+```{r}
+library(magrittr)
+library(dplyr)
+```
+
+
 
 ## neurons expressed receptors
 
@@ -1495,6 +1502,7 @@ neurons_receptors$gene_b_ligand <- ifelse(is.na(neurons_receptors$gene_b_ligand)
 library(scuttle)
 library(dplyr)
 library(tidyr)
+library(stringr)
 
 neurons_receptors <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/neurons_receptors.rds")
 sces_human <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated_human.rds")
@@ -1515,7 +1523,6 @@ ligands_ids <- sapply(ligands, function(x){
 ligands_ids %>% table
 ligands <- ligands[ligands_ids] %>% sapply(str_c, collapse = ",")
 
-
 neurons_receptors <- neurons_receptors %>% dplyr::filter(gene_a_receptor %in% receptors & gene_b_ligand %in% ligands)
 
 # extract receptors expression
@@ -1531,7 +1538,7 @@ neurons_receptors <- neurons_receptors %>%
 
 
 # extract ligands expression
-neurons_receptors <- neurons_receptors[1:100, ] %>% 
+neurons_receptors <- neurons_receptors %>% 
     rowwise() %>% 
     mutate(gene_b_ligand_expression = makePerCellDF(sces_human[, sces_human$level3_cluster == cell_b_ligand], 
                                                       features = str_split(gene_b_ligand, ",") %>% unlist) %>% 
@@ -1544,5 +1551,16 @@ saveRDS(neurons_receptors, "../data/kidney/kidney-map/results/cell_cell_communic
 ```
 
 ### visualize neurons top receptors ligand's expression
+```{r}
+library(dplyr)
+library(tidyr)
+
+neurons_top_receptors_ligands <- split(neurons_receptors, f = neurons_receptors$cell_a_receptor)
+
+neurons_top_receptors_ligands$`Sympathetic Neurons` %>% 
+    mutate(rank = rank(gene_a_receptor_expression))
+```
+
+
 
 ## neurons secreted proteins
