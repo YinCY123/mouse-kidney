@@ -1457,8 +1457,8 @@ neurons_top_ligands_list <- neurons_top_ligands_list %>% lapply(function(x){
                  partner_b_ligand = factor(partner_b_ligand))
 })
 
-neurons_top_ligands_list[[1]][, c("partner_a_receptor", "gene_b_ligand")] %>% distinct()
 
+# sensory neurons
 labels <- data.frame(label = c("SORL1" = "APP ",
                                "TNFRSF21" = "APP ", 
                                "TREM2_receptor" = "APP,APOE ", 
@@ -1474,9 +1474,8 @@ labels <- data.frame(label = c("SORL1" = "APP ",
                                "TACR1" = "TAC1 ", 
                                "TACR2" = "TAC1 ", 
                                "PIGR" = "APLP2 "))
-
-neurons_top_ligands_list[[1]] %>% 
-    ggplot(aes(factor(cell_a_receptor, levels), partner_a_receptor)) +
+ neurons_top_ligands_list[[1]] %>% 
+    ggplot(aes(factor(cell_a_receptor, levels), reorder(partner_a_receptor, cell_a_receptor))) +
     geom_point(aes(size = log1p(gene_a_receptor_expression))) +
     geom_text(data = labels, aes(x = 0, y = 1:15, label = label), hjust = 1, size = 3, color = "grey20") +
     geom_text(aes(x = 0, y = 16, label = "ligands"), hjust = 1) +
@@ -1484,24 +1483,92 @@ neurons_top_ligands_list[[1]] %>%
     coord_cartesian(clip = "off") +
     scale_x_discrete(name = NULL, expand = c(0,0), position = "top") +
     scale_y_discrete(name = NULL, position = "right") +
-    scale_size_area(name = "receptor expression level", breaks = c(0.1, 0.5, 1), max_size = 15) +
+    scale_size_area(name = "receptor expression level", breaks = c(0.1, 0.5, 1), max_size = 13) +
     theme(axis.text.x = element_text(size = 8, angle = -50, hjust = 1, vjust = 0.5, color = "grey20"), 
           axis.ticks = element_blank(), 
           plot.margin = unit(c(6, 5, 1, 25), units = "mm"),  
           panel.background = element_rect(fill = "white"),
-          
-          legend.position = "bottom")
+          panel.grid.major = element_line(linetype = 2, linewidth = 0.3, color = "grey70"),
+          legend.position = "bottom") 
 
-ggsave("ligands.pdf", width = 13, height = 7)
+ggsave("../data/kidney/kidney-map/results/cell_cell_communication/sensory_neuron_top_ligands_receptors_expression.pdf", 
+       width = 15, height = 7)
+
+
+# sympathetic neurons
+neurons_top_ligands_list[[2]] %>% dplyr::select(partner_a_receptor, partner_b_ligand) %>% distinct()
+labels = c("SORL1" = "APP", 
+           "TNFRSF21" = "APP", 
+           "TREM2_receptor"  ="APP", 
+           "CD74" = "APP", 
+           "PLXNA4" = "APP", 
+          "ADRA1A" = "Noradrenaline_byDBH\nNoradrenaline_byDBH_and_SLC18A2\nNoradrenaline_byDBH_and_SLC6A2", 
+          "ADRA1B" = "Noradrenaline_byDBH\nNoradrenaline_byDBH_and_SLC18A2\nNoradrenaline_byDBH_and_SLC6A2", 
+          "ADRA1D" = "Noradrenaline_byDBH\nNoradrenaline_byDBH_and_SLC18A2\nNoradrenaline_byDBH_and_SLC6A2", 
+          "ADRA2A" = "Noradrenaline_byDBH\nNoradrenaline_byDBH_and_SLC18A2\nNoradrenaline_byDBH_and_SLC6A2", 
+          "ADRA2B" = "Noradrenaline_byDBH\nNoradrenaline_byDBH_and_SLC18A2\nNoradrenaline_byDBH_and_SLC6A2", 
+          "ADRA2C" = "Noradrenaline_byDBH\nNoradrenaline_byDBH_and_SLC18A2\nNoradrenaline_byDBH_and_SLC6A2", 
+          "ADRB1" = "Noradrenaline_byDBH\nNoradrenaline_byDBH_and_SLC18A2\nNoradrenaline_byDBH_and_SLC6A2", 
+          "ADRB2" = "Noradrenaline_byDBH\nNoradrenaline_byDBH_and_SLC18A2\nNoradrenaline_byDBH_and_SLC6A2", 
+          "ADRB3" = "Noradrenaline_byDBH\nNoradrenaline_byDBH_and_SLC18A2\nNoradrenaline_byDBH_and_SLC6A2", 
+          "SCARA5" = "FTH1", 
+          "GALR1" = "GAL", 
+          "GALR2" = "GAL", 
+          "GALR3" = "GAL", 
+          "PRLHR" = "NPY", 
+          "HTR1A" = "SerotoninDopamin_byDDC", 
+          "HTR1B" = "SerotoninDopamin_byDDC", 
+          "HTR1F" = "SerotoninDopamin_byDDC", 
+          "HTR2A" = "SerotoninDopamin_byDDC", 
+          "HTR2B" = "SerotoninDopamin_byDDC", 
+          "HTR2C" = "SerotoninDopamin_byDDC", 
+          "HTR3A" = "SerotoninDopamin_byDDC", 
+          "HTR3B" = "SerotoninDopamin_byDDC", 
+          "HTR4" = "SerotoninDopamin_byDDC", 
+          "HTR5A" = "SerotoninDopamin_byDDC", 
+          "HTR6" = "SerotoninDopamin_byDDC", 
+          "HTR7" = "SerotoninDopamin_byDDC", 
+          "DRD1" = "SerotoninDopamin_byDDC\nDopamine_byDDC_and_SLC18A1\nDopamine_byDDC_and_SLC18A2", 
+          "DRD2" = "SerotoninDopamin_byDDC\nDopamine_byDDC_and_SLC18A1\nDopamine_byDDC_and_SLC18A2", 
+          "DRD3" = "SerotoninDopamin_byDDC\nDopamine_byDDC_and_SLC18A1\nDopamine_byDDC_and_SLC18A2", 
+          "DRD4" = "SerotoninDopamin_byDDC\nDopamine_byDDC_and_SLC18A1\nDopamine_byDDC_and_SLC18A2",
+          "NPY1R" = "NPY", 
+          "NPY2R" = "NPY", 
+          "NPY5R" = "NPY") %>% as.data.frame() %>% magrittr::set_colnames(value = "label")
+
+
+neurons_top_ligands_list[[2]] %>% 
+    ggplot(aes(factor(cell_a_receptor, levels), partner_a_receptor)) +
+    geom_point(aes(size = log1p(gene_a_receptor_expression))) +
+    geom_text(data = labels, aes(x = 0, y = 1:38, label = label), hjust = 1, size = 2.5, color = "grey20") +
+    geom_text(aes(x = 0, y = 39, label = "ligands"), hjust = 1, size = 5) +
+    geom_text(aes(x = 40, y = 39, label = "receptors"), hjust = 0, size = 5) +
+    coord_cartesian(clip = "off") +
+    scale_x_discrete(name = NULL, expand = c(0,0), position = "top") +
+    scale_y_discrete(name = NULL, position = "right") +
+    scale_size_area(name = "receptor expression level", breaks = c(0.1, 0.5, 1), max_size = 15) +
+    theme(axis.text.x = element_text(size = 10, angle = -50, hjust = 1, vjust = 0.5, color = "grey20"), 
+          axis.text.y = element_text(size = 13),
+          axis.ticks = element_blank(), 
+          plot.margin = unit(c(6, 5, 1, 45), units = "mm"),  
+          panel.background = element_rect(fill = "white"),
+          panel.grid.major = element_line(linetype = 2, linewidth = 0.3, color = "grey70"),
+          legend.position = "bottom") 
+
+ggsave("../data/kidney/kidney-map/results/cell_cell_communication/sympathetic_neuron_top_ligands_receptors_expression.pdf", 
+       width = 25, height = 20)
 ```
 
-```{r}
-neurons_top_ligands_list[[1]]$partner_a_receptor %>% levels
-```
+
+
 
 ## neurons expressed receptors
 
 ```{r}
+library(dplyr)
+library(tidyr)
+library(stringr)
+
 means_long <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/means_long.rds")
 
 # remove all secreted interactions
@@ -1539,6 +1606,7 @@ neurons_receptors <- receptors_expressed_by_neurons %>%
                                         str_replace(",{1,}$", "") , 
                                     gene_a_receptor))
 
+source("functions/idconv.R")
 neurons_receptors <- neurons_receptors %>% 
     rowwise() %>% 
     mutate(gene_a_receptor = ifelse(grepl("^complex:", partner_a_receptor), 
@@ -1552,7 +1620,7 @@ neurons_receptors$gene_a_receptor <- ifelse(is.na(neurons_receptors$gene_a_recep
 
 
 
-# convert ligands idto symbol id
+# convert ligands id to symbol id
 neurons_receptors <- neurons_receptors %>% 
     rowwise() %>% 
     mutate(gene_b_ligand = ifelse(grepl("^complex:", partner_b_ligand), 
@@ -1573,7 +1641,9 @@ neurons_receptors %>% dplyr::filter(is.na(gene_b_ligand))
 neurons_receptors %>% dplyr::filter(grepl("^ENSG", gene_b_ligand))
 # manually change NA to CEL, this conversion failed for CEL uniprot id to symbol id
 neurons_receptors$gene_b_ligand <- ifelse(is.na(neurons_receptors$gene_b_ligand), "CEL", neurons_receptors$gene_b_ligand)
+saveRDS(neurons_receptors, "../data/kidney/kidney-map/results/cell_cell_communication/")
 ```
+
 
 ```{r}
 library(scuttle)
@@ -1628,18 +1698,15 @@ neurons_receptors <- neurons_receptors %>% dplyr::rename(interaction_pair_expres
 saveRDS(neurons_receptors, "../data/kidney/kidney-map/results/cell_cell_communication/neurons_receptors.rds")
 ```
 
+
 ### visualize neurons top receptors ligand's expression
 
 ```{r}
 library(dplyr)
 library(tidyr)
 
-neurons_top_receptors_ligands <- split(neurons_receptors, f = neurons_receptors$cell_a_receptor)
+neurons_receptors <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/neurons_receptors.rds")
 
-neurons_top_receptors_ligands %>% lapply(function(x){
-    transform(x, 
-              receptor_expression_order = order(gene_a_expression_order, decreasing = TRUE))
-})
 ```
 
 ## neurons secreted proteins
