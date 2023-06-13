@@ -1416,8 +1416,87 @@ saveRDS(neurons_ligands, "../data/kidney/kidney-map/results/cell_cell_communicat
 ### visualize neurons top ligand's receptors expression
 
 ```{r}
-library(magrittr)
 library(dplyr)
+library(ggplot2)
+sces_human <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated_human.rds")
+levels <- sces_human$level3_cluster %>% levels
+
+neurons_ligands <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/neurons_ligands.rds")
+neurons_ligands_list <- split(neurons_ligands, f = neurons_ligands$cell_b_ligand)
+
+neurons_top_ligands_list <- neurons_ligands_list %>% lapply(function(x){
+    top_ids <- x %>% 
+        arrange(-gene_b_ligand_expression) %>% 
+        pull(gene_b_ligand) %>% 
+        unique %>% 
+        head(10)
+    
+    x %>% dplyr::filter(gene_b_ligand %in% top_ids)
+})
+
+neurons_top_ligands_list <- neurons_top_ligands_list %>% 
+    lapply(function(x){
+        x %>% rowwise %>% 
+            mutate(partner_a_receptor = ifelse(grepl("^simple:", partner_a_receptor), 
+                                            gene_a_receptor, 
+                                            ifelse(grepl("^complex:", partner_a_receptor), 
+                                                   gsub("^complex:", "", partner_a_receptor), 
+                                                   partner_a_receptor)), 
+                   
+                   partner_b_ligand = ifelse(grepl("^simple:", partner_b_ligand), 
+                                             gene_b_ligand, 
+                                             ifelse(grepl("^complex:", partner_b_ligand), 
+                                                    gsub("^complex:", "", partner_b_ligand), 
+                                                    partner_b_ligand)))
+    })
+
+neurons_top_ligands_list <- neurons_top_ligands_list %>% lapply(function(x){
+    x %>% mutate(gene_a_receptor = factor(gene_a_receptor, levels = unique(gene_a_receptor)), 
+                 gene_b_ligand = factor(gene_b_ligand, levels = unique(gene_b_ligand)), 
+                 partner_a_receptor = factor(partner_a_receptor), 
+                 partner_b_ligand = factor(partner_b_ligand))
+})
+
+neurons_top_ligands_list[[1]][, c("partner_a_receptor", "gene_b_ligand")] %>% distinct()
+
+labels <- data.frame(label = c("SORL1" = "APP ",
+                               "TNFRSF21" = "APP ", 
+                               "TREM2_receptor" = "APP,APOE ", 
+                               "CD74" = "APP ", 
+                               "PLXNA4" = "APP,APLP2 ", 
+                               "CALCR" = "CALCA,CALCB ",
+                               "RAMP1_complex" = "CALCA,CALCB ", 
+                               "ADGRG6" = "PRNP ", 
+                               "ADGRG5" = "THY1 ", 
+                               "SCARA5" = "FTH1 ", 
+                               "GPR37L1" = "PSAP ", 
+                               "GPR37" = "PSAP ", 
+                               "TACR1" = "TAC1 ", 
+                               "TACR2" = "TAC1 ", 
+                               "PIGR" = "APLP2 "))
+
+neurons_top_ligands_list[[1]] %>% 
+    ggplot(aes(factor(cell_a_receptor, levels), partner_a_receptor)) +
+    geom_point(aes(size = log1p(gene_a_receptor_expression))) +
+    geom_text(data = labels, aes(x = 0, y = 1:15, label = label), hjust = 1, size = 3, color = "grey20") +
+    geom_text(aes(x = 0, y = 16, label = "ligands"), hjust = 1) +
+    geom_text(aes(x = 40, y = 16, label = "receptors"), hjust = 0) +
+    coord_cartesian(clip = "off") +
+    scale_x_discrete(name = NULL, expand = c(0,0), position = "top") +
+    scale_y_discrete(name = NULL, position = "right") +
+    scale_size_area(name = "receptor expression level", breaks = c(0.1, 0.5, 1), max_size = 15) +
+    theme(axis.text.x = element_text(size = 8, angle = -50, hjust = 1, vjust = 0.5, color = "grey20"), 
+          axis.ticks = element_blank(), 
+          plot.margin = unit(c(6, 5, 1, 25), units = "mm"),  
+          panel.background = element_rect(fill = "white"),
+          
+          legend.position = "bottom")
+
+ggsave("ligands.pdf", width = 13, height = 7)
+```
+
+```{r}
+neurons_top_ligands_list[[1]]$partner_a_receptor %>% levels
 ```
 
 ## neurons expressed receptors
