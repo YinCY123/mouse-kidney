@@ -1704,9 +1704,44 @@ saveRDS(neurons_receptors, "../data/kidney/kidney-map/results/cell_cell_communic
 ```{r}
 library(dplyr)
 library(tidyr)
+library(ggplot2)
+library(stringr)
 
+sces_human <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated_human.rds")
+levels <- sces_human$level3_cluster %>% levels
 neurons_receptors <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/neurons_receptors.rds")
 
+neurons_receptors_list <- split(neurons_receptors, f = neurons_receptors$cell_a_receptor)
+
+neurons_top_receptors_list
+
+neurons_receptors_top_list <- neurons_receptors_list %>% lapply(function(x){
+    ids <- x %>% 
+        dplyr::arrange(-gene_a_receptor_expression) %>% 
+        dplyr::pull(gene_a_receptor) %>% unique %>% head(10)
+    x %>% dplyr::filter(gene_a_receptor %in% ids) %>% dplyr::arrange(-gene_a_receptor_expression)
+})
+
+neurons_receptors_top_list %>% lapply(function(x){
+    x %>% rowwise() %>% 
+        mutate(partner_b_ligand = ifelse(grepl("^simple:", partner_b_ligand), 
+                                         gene_b_ligand, 
+                                         gsub("^complex:", "", partner_b_ligand)), 
+               partner_a_receptor = ifelse(grepl("^simple:", partner_a_receptor), 
+                                            ))
+    
+})
+
+neurons_receptors_top_list[[1]] %>% 
+    ggplot(aes(factor(cell_b_ligand, levels), partner_b_ligand)) +
+    geom_point(aes(size = gene_b_ligand_expression)) +
+    scale_x_discrete(name = NULL, position = "top") +
+    scale_y_discrete(name = NULL) +
+    scale_size_area(max_size = 5) +
+    theme(axis.text.x = element_text(angle = -60, hjust = 1, size = 6), 
+          panel.background = element_blank(), 
+          axis.ticks.length = unit(0, "mm"), 
+          panel.grid.major = element_line(linetype = 2, linewidth = 0.2))
 ```
 
 ## neurons secreted proteins
