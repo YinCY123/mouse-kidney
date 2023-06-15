@@ -1555,12 +1555,9 @@ neurons_top_ligands_list[[2]] %>%
           panel.grid.major = element_line(linetype = 2, linewidth = 0.3, color = "grey70"),
           legend.position = "bottom") 
 
-ggsave("../data/kidney/kidney-map/results/cell_cell_communication/sympathetic_neuron_top_ligands_receptors_expression.pdf", 
+ggsave("../data/kidney/kidney-map/results/cell_cell_communication/sympathetic_top_ligands_receptors_expression.pdf", 
        width = 25, height = 20)
 ```
-
-
-
 
 ## neurons expressed receptors
 
@@ -1644,7 +1641,6 @@ neurons_receptors$gene_b_ligand <- ifelse(is.na(neurons_receptors$gene_b_ligand)
 saveRDS(neurons_receptors, "../data/kidney/kidney-map/results/cell_cell_communication/")
 ```
 
-
 ```{r}
 library(scuttle)
 library(dplyr)
@@ -1698,7 +1694,6 @@ neurons_receptors <- neurons_receptors %>% dplyr::rename(interaction_pair_expres
 saveRDS(neurons_receptors, "../data/kidney/kidney-map/results/cell_cell_communication/neurons_receptors.rds")
 ```
 
-
 ### visualize neurons top receptors ligand's expression
 
 ```{r}
@@ -1713,8 +1708,6 @@ neurons_receptors <- readRDS("../data/kidney/kidney-map/results/cell_cell_commun
 
 neurons_receptors_list <- split(neurons_receptors, f = neurons_receptors$cell_a_receptor)
 
-neurons_top_receptors_list
-
 neurons_receptors_top_list <- neurons_receptors_list %>% lapply(function(x){
     ids <- x %>% 
         dplyr::arrange(-gene_a_receptor_expression) %>% 
@@ -1722,26 +1715,123 @@ neurons_receptors_top_list <- neurons_receptors_list %>% lapply(function(x){
     x %>% dplyr::filter(gene_a_receptor %in% ids) %>% dplyr::arrange(-gene_a_receptor_expression)
 })
 
-neurons_receptors_top_list %>% lapply(function(x){
+neurons_receptors_top_list <- neurons_receptors_top_list %>% lapply(function(x){
     x %>% rowwise() %>% 
         mutate(partner_b_ligand = ifelse(grepl("^simple:", partner_b_ligand), 
                                          gene_b_ligand, 
                                          gsub("^complex:", "", partner_b_ligand)), 
                partner_a_receptor = ifelse(grepl("^simple:", partner_a_receptor), 
-                                            ))
+                                           gene_a_receptor, 
+                                           gsub("^complex:", "", partner_a_receptor)))
     
 })
 
+# convert character to factor
+neurons_receptors_top_list <- neurons_receptors_top_list %>% lapply(function(x){
+    x %>% rowwise() %>% 
+        mutate(partner_a_receptor = factor(partner_a_receptor, unique(partner_a_receptor)), 
+               partner_b_ligand = factor(partner_b_ligand, unique(partner_b_ligand)), 
+               gene_a_receptor = factor(gene_a_receptor, unique(gene_a_receptor)), 
+               gene_b_ligand = factor(gene_b_ligand, unique(gene_b_ligand)))
+})
+
+labels <- neurons_receptors_top_list[[1]] %>% dplyr::select( partner_b_ligand, partner_a_receptor) %>% distinct() %>% tibble::column_to_rownames("partner_b_ligand")
+labels$partner_a_receptor <- paste("  ", labels$partner_a_receptor)
+
 neurons_receptors_top_list[[1]] %>% 
     ggplot(aes(factor(cell_b_ligand, levels), partner_b_ligand)) +
-    geom_point(aes(size = gene_b_ligand_expression)) +
+    geom_point(aes(size = log1p(gene_b_ligand_expression))) +
+    geom_text(data = labels, aes(x = 39.5, y = 1:43, label = partner_a_receptor), hjust = 0, size = 2, color = "grey20") +
     scale_x_discrete(name = NULL, position = "top") +
     scale_y_discrete(name = NULL) +
-    scale_size_area(max_size = 5) +
-    theme(axis.text.x = element_text(angle = -60, hjust = 1, size = 6), 
-          panel.background = element_blank(), 
-          axis.ticks.length = unit(0, "mm"), 
-          panel.grid.major = element_line(linetype = 2, linewidth = 0.2))
+    geom_text(x = -1.15, y = 45, label = "ligand") +
+    geom_text(x = 41.27, y = 45, label = "neuron\nreceptor") +
+    coord_cartesian(clip = "off") +
+    scale_size_area(name = "ligands expression level", max_size = 6) +
+    theme(axis.text.x = element_text(angle = -60, hjust = 1, size = 6, color = "grey20"), 
+          axis.text.y = element_text(size = 6, color = "grey20"),
+          panel.background = element_rect(fill = "white"), 
+          axis.ticks = element_blank(), 
+          panel.grid.major = element_line(linetype = 2, linewidth = 0.1, color = "grey70"), 
+          legend.position = "bottom", 
+          plot.margin = unit(c(0, 20, 0, 2), "mm"))
+
+ggsave("../data/kidney/kidney-map/results/cell_cell_communication/sensory_top_ligand_receptors_expression.pdf", width = 10)
+
+
+labels <- data.frame(label = c("ARGN" = "NCAM1", 
+                               "REN" = "ATP6AP2", 
+                               "EFNA1" = "EPHA5",
+                               "EFNA2" = "EPHA5",
+                               "EFNA3" = "EPHA5", 
+                               "EFNA4" = "EPHA5",
+                               "EFNA5" = "EPHA5", 
+                               "NGF" = "NTRK1,NGFR", 
+                               "NTF3" = "NTRK1,NGFR", 
+                               "APP" = "PLXNA4", 
+                               "APLP2" = "PLXNA4", 
+                               "NTF4" = "NGFR", 
+                               "BDNF" = "NGFR", 
+                               "RLN3" = "RXFP1", 
+                               "Acetylcholine_byCHAT_and_SLC10A4" = "AcetylcholineReceptor_a3b4", 
+                               "Acetylcholine_byCHAT_and_SLC18A3" = "AcetylcholineReceptor_a3b4", 
+                               "Acetylcholine_byCHAT_and_SLC5A7" = "AcetylcholineReceptor_a3b4", 
+                               "SCT" = "SCTR", 
+                               "VIP" = "SCTR", 
+                               "GABA_byGAD1_and_SLC6A12" = "GABBR1", 
+                               "GABA_byGAD1_and_SLC6A6" = "GABBR1", 
+                               "GABA_byGAD1_and_SLC6A8" = "GABBR1", 
+                               "GABA_byGAD2_and_SLC6A12" = "GABBR1", 
+                               "GABA_byGAD2_and_SLC6A6" = "GABBR1", 
+                               "GABA_byGAD2_and_SLC6A8" = "GABBR1", 
+                               "GABA_byGAD1_and_SLC6A13" = "GABBR1", 
+                               "GABA_byGAD2_and_SLC6A1" = "GABBR1", 
+                               "GABA_byGAD2_and_SLC6A13" = "GABBR1", 
+                               "GABA_byGAD1_and_SLC32A1" = "GABBR1", 
+                               "GABA_byGAD1_and_SLC6A1" = "GABBR1", 
+                               "GABA_byGAD1_and_SLC6A11" = "GABBR1"))
+labels$label <- paste(" ", labels$label, sep = "")
+
+
+neurons_receptors_top_list[[2]] %>% 
+    ggplot(aes(factor(cell_b_ligand, levels), partner_b_ligand)) +
+    geom_point(aes(size = log1p(gene_b_ligand_expression))) +
+    geom_text(data = labels, aes(x = 39.5, y = 1:31, label = label), hjust = 0, size = 2, color = "grey20") +
+    scale_x_discrete(name = NULL, position = "top") +
+    scale_y_discrete(name = NULL) +
+    geom_text(x = -1.15, y = 32, label = "ligand") +
+    geom_text(x = 41.27, y = 32, label = "receptor") +
+    coord_cartesian(clip = "off") +
+    scale_size_area(name = "ligands expression level", max_size = 6, breaks = c(0.1, 0.5, 1.0)) +
+    theme(axis.text.x = element_text(angle = -60, hjust = 1, size = 8, color = "grey20"), 
+          axis.text.y = element_text(size = 6, color = "grey20"),
+          panel.background = element_rect(fill = "white"), 
+          axis.ticks = element_blank(), 
+          panel.grid.major = element_line(linetype = 2, linewidth = 0.1, color = "grey70"), 
+          legend.position = "bottom", 
+          plot.margin = unit(c(0, 30, 0, 2), "mm"))
+
+ggsave("../data/kidney/kidney-map/results/cell_cell_communication/sympathetic_top_ligand_receptors_expression.pdf",
+       width = 10)
 ```
 
+
 ## neurons secreted proteins
+```{r}
+library(dplyr)
+library(tidyr)
+library(stringr)
+
+means_long <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/means_long.rds")
+
+# remove all secreted interactions
+means_long %>% dplyr::filter((receptor_a == "False" & receptor_b == "False") & secreted == "False") %>% 
+    dplyr::filter(cell_a %in% c("Sensory Neurons", "Sympathetic Neurons")) %>% pull(interacting_pair) %>% unique
+```
+
+```{r}
+complex_input["integrin_a2b1_complex", ]
+```
+
+
+
