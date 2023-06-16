@@ -253,8 +253,8 @@ fmarker4[[16]] %>% rownames() %>% head(50) %>% idconv(from_type = "GENEID", to_t
 ```{r}
 plotExpression(sces, 
                # features = fmarker4[[7]] %>% rownames() %>% .[1:50],
-               features = idconv("Dkk1"),
-               x = "level2_cluster", 
+               features = idconv("Pi16", db = "mouse"),
+               x = "level3_cluster", 
                ncol = 2) +
     theme(axis.text.x = element_text(angle = -60, hjust = 0, vjust = 0.5))
 
@@ -334,7 +334,7 @@ level2_markers <- list(
     "Endothelium" = c("Pecam1", "Ly6c1", "Kdr", "Cdh5", "Flt1", "Emcn", "Sox18",
                       "Egfl7", "Gimap6", "Fabp4", "Esam", "Rsad2", "Adgrl4", 
                       'Cd300lg', "Ctla2a", "Icam2", "Fam167b", "Mmrn2", "Tek", "Ramp3", "Tie1"),
-    "Parietal Epithelial" = c("Cp", "C3", "Efemp1", "Stc2", "Ackr3"),
+    "Parietal Epithelial" = c("Stc2", "C3"),
     "Proximal Tubule" = c("Slc34a1", "Acsm2", "Miox", "Ass1", "Akr1c21", "Keg", "Spink1", "Fbp1", "Ttc36"),
     "dLOH" = c("Bst1", "Pitx2"),
     "aLOH" = c("Slc12a1", "Sptssb", "Ptger3"),
@@ -391,33 +391,47 @@ saveRDS(p_level2, "../data/kidney/kidney-map/results/markers/p_level2_markers.rd
 ### level 3 markers
 
 ```{r}
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+sces$level3_cluster %>% levels()
 level3_markers <- list(
-    "Endothelium" = c("Pecam1"), 
-    "Parietal Epithelial" = c("ccdc198"), 
-    "Proximal Tubule" = c("Slc34a1"), 
-    "dLOH" = c("Bst1"), 
-    "aLOH" = c("Slc12a1"), 
-    "Distal Tubule" = c("Slc12a3"), 
-    "CD_IC" = c("Atp6v1g3"), 
-    "CD_PC" = c("Aqp2"), 
+    "Endothelial" = c("Pecam1"), 
+    "Afferent/Efferent Endothelial" = c(""),
+    "Glomerular Endothelial" = c("Grasp", "Pi16", "Gm49393", "Pde2a", "Gm49391"),
+    "Spinal Endothelial" = c(""), 
+    "Parietal Epithelial" = c("Stc2", "C3"), 
+    "PTS1" = c("Slc34a1"), 
+    "PTS2" = ,
+    "PTS3" = ,
+    "LOH_DTL1" = ,
+    "LOH_DTL2" = ,
+    "LOH_DTL3" = ,
+    "DCT" = c("Slc12a3"), 
+    "CNT" = ,
+    "CCD_IC" = ,
+    "OMCD_IC" = ,
+    "IMCD_IC" = ,
+    "CCD_PC" = ,
+    "OMCD_PC" = ,
+    "IMCD_PC" = ,
     "Fibroblast" = c("Krt19"), 
     "VSMC" = c("Cnn1"), 
     "Pericytes" = c("Cspg4"), 
-    "Podocyte" = c("Clic3"), 
     "Mesangial Cells A" = c("Cebpb"), 
     "Mesangial Cells B" = c("Rn7sk"), 
-    "Sensory Neurons" = c("Calca"), 
-    "Sympathetic Neurons" = c("Dbh"), 
-    "Satellite Glia A" = c("Fabp7"), 
-    "Satellite Glia B" = c("Scn7a", "Entpd2", 'Col3a1', "C4b"), 
-    "Schwann Cells" = c("Ncmap"), 
+    "Podocyte" = c("Clic3"), 
     "Monocytes" = c("Sirpb1c"), 
     "Dendritic Cells" = c("Cd209a"), 
     "Macrophages" = c("C1qa"), 
     "NK Cells" = c("Gzma"), 
     "Cd4 T Cells" = c("Cd4"), 
     "Cd8 T Cells" = c("Cd8a"), 
-    "B Cells" = c("Cd79a")
+    "B Cells" = c("Cd79a"),
+    "Sensory Neurons" = c("Calca"), 
+    "Sympathetic Neurons" = c("Dbh"), 
+    "Satellite Glia A" = c("Fabp7"), 
+    "Satellite Glia B" = c("Scn7a", "Entpd2", 'Col3a1', "C4b"), 
+    "Schwann Cells" = c("Ncmap"), 
+
 )
 
 level3_df <- makePerCellDF(sces, features = idconv(sapply(level3_markers, "[[", 1)), use.dimred = F) %>% 
@@ -436,8 +450,27 @@ p_level3 <- level3_df %>%
     scale_y_continuous(name = NULL) +
     marker_themes
 
+source("functions/idconv.R")
+idconv("ENSMUSG00000024011", from_type = "GENEID", to_type = "SYMBOL", db = "mouse")
 saveRDS(p_level3, "../data/kidney/kidney-map/results/markers/p_level3_markers.rds")
 ```
+
+```{r}
+library(patchwork)
+library(ggplot2)
+
+p0 <- readRDS("../data/kidney/kidney-map/results/p_cluster_relationships.rds")
+p1 <- readRDS("../data/kidney/kidney-map/results/markers/p_level1_markers.rds")
+p2 <- readRDS("../data/kidney/kidney-map/results/markers/p_level2_markers.rds")
+p3 <- readRDS("../data/kidney/kidney-map/results/markers/p_level3_markers.rds")
+
+p0 + ((p1 + p2 + plot_layout(widths = c(1, 2.3))) / p3 + plot_layout(heights = c(4, 5))) + plot_layout(widths = c(1, 5),ncol = 2)
+    
+
+ggsave("../data/kidney/kidney-map/results/markers/marker.pdf", 
+       height = 25, width = 40)
+```
+
 
 # cell-cell communication
 
