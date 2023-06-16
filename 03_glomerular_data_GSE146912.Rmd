@@ -65,7 +65,8 @@ colData(glomer_sce)$qclusters <- qclusters
 qc <- perCellQCMetrics(glomer_sce, subsets = list(mito = is_mito))
 qc$subsets_mito_percent %>% quantile(probs = seq(0, 1, 0.05))
 
-qc_stat <- perCellQCFilters(x = qc, sub.fields = "subsets_mito_percent")
+qc_stat <- perCellQCFilters(x = qc, 
+                            sub.fields = "subsets_mito_percent")
 qc_stat %>% as.data.frame() %>% colSums()
 glomer_sce <- glomer_sce[, !(qc_stat$low_n_features | qc_stat$low_lib_size | qc$subsets_mito_percent > 5)]
 ```
@@ -147,7 +148,7 @@ source("functions/idconv.R")
 library(patchwork)
 plotReducedDim(glomer_sce, 
                dimred = "TSNE", 
-               colour_by = idconv("Pax8", db = "mouse"),
+               colour_by = idconv("Pax8"),
                # colour_by = "label",
                text_by = "label", 
                point_size = 0.4)
@@ -158,7 +159,7 @@ plotReducedDim(glomer_sce,
 # cell type annotation
 cell_type <- c("1" = "Mesangial Cells A", 
                "2" = "Parietal Epithelial", 
-               "3" = "Endothelial",
+               "3" = "Afferent/Efferent Endothelial",
                "4" = "Mesangial Cells B",
                "5" = "Podocyte", 
                "6" = "Podocyte",

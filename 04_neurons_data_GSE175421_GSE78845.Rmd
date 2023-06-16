@@ -36,8 +36,8 @@ drg_cell_barcode_ids <- drg_cell_barcode_ids %>%
 rownames(drg_cell_barcode_ids) <- drg_cell_barcode_ids$cell_ids
 drg_cell_barcode_ids$cell_type <- drg_cell_barcode_ids$main_cluster
 drg_cell_barcode_ids$cell_type %>% table
-drg_cell_barcode_ids$cell_type <- ifelse(drg_cell_barcode_ids$cell_type == "Vascular Endothelial Cells", "paravertebral Endothelial", drg_cell_barcode_ids$cell_type)
-drg_cell_barcode_ids$location <- "paravertebral"
+drg_cell_barcode_ids$cell_type <- ifelse(drg_cell_barcode_ids$cell_type == "Vascular Endothelial Cells", "Spinal Endothelial", drg_cell_barcode_ids$cell_type)
+drg_cell_barcode_ids$location <- "Spine"
 
 drg_cell_barcode_list <- split(drg_cell_barcode_ids, f = drg_cell_barcode_ids$library_id)
 
@@ -175,7 +175,7 @@ colData(drg_sce)$clusters <- clusters
 
 colData(drg_sce)$cell_type <- sapply(colData(drg_sce)$clusters, 
                                         FUN = function(x){
-                                            switch(as.character(x), 
+                                            switch(x, 
                                                    "1" = "Sensory Neurons", 
                                                    "2" = "Satellite Glia B", 
                                                    "3" = "Sensory Neurons", 
@@ -183,9 +183,9 @@ colData(drg_sce)$cell_type <- sapply(colData(drg_sce)$clusters,
                                                    "5" = "Satellite Glia A", 
                                                    "6" = "Schwann Cells", 
                                                    "7" = "Schwann Cells", 
-                                                   "8" = "paravetebral Endothelial", 
+                                                   "8" = "Spinal Endothelial", 
                                                    "9" = "Sensory Neurons", 
-                                                   "10" = "paravetebral Endothelial")
+                                                   "10" = "Spinal Endothelial")
                                         })
 colData(drg_sce)$cell_type %>% table
 source("functions/idconv.R")
@@ -284,11 +284,12 @@ library(janitor)
 
 run_info <- read.table("data/GSE78845_SraRunTable.txt", sep = ",", header = TRUE) %>% 
     clean_names()
-selected_vars <- c("run", "cell_type", "celltype_identifier", "source_name", "age")
+selected_vars <- c("run", "cell_type", "celltype_identifier", 
+                   "sex", "source_name", "age")
 run_info <- run_info %>% select(selected_vars) %>% 
     rename(cell_ids = "run")
 run_info$cell_type <- ifelse(run_info$cell_type == "sympathetic neuronal cells", "Sympathetic Neurons", run_info$cell_type)
-run_info$location <- "paravertebral"
+run_info$location <- "Spine"
 rownames(run_info) <- run_info$cell_ids
 
 feature_counts <- readRDS("../data/kidney/kidney-map/GSE78845/feature_counts.rds")
@@ -307,11 +308,8 @@ rownames(gene_df) <- gene_df$ensembl
 
 mtx <- feature_counts$counts
 mtx[1:10, 1:5]
-mtx %>% dim
 colnames(mtx) <- gsub(".bam", "", colnames(mtx))
 
-ids <- match(rownames(run_info), colnames(mtx))
-mtx <- mtx[, ids]
 
 library(SingleCellExperiment)
 library(Matrix)
@@ -377,7 +375,7 @@ reducedDim(sym_sce, "PCA") <- npcs[, 1:elbow]
 set.seed(107)
 sym_sce <- runTSNE(sym_sce, dimred = "PCA", perplexity = 10)
 
-source("functions/idconv.R")
+source("R/idconv.R")
 plotTSNE(sym_sce, 
          # colour_by = "qclusters", 
          colour_by = idconv("Dbh"))
