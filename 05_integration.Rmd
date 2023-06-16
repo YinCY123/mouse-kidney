@@ -97,10 +97,48 @@ plotTSNE(sces,
     guides(size = guide_legend(override.aes = list(size = 3)))
 
 
-ggsave("figures/harmony_TSNE_cell_type.pdf")
-saveRDS(sces, "../data/kidney/kidney-map/integrated_data/harmonized_integrated.rds")
+ggsave("harmony.pdf")
+saveRDS(sces, "../data/kidney/kidney-map/integrated_data/harmony_integrated.rds")
 ```
 
+
+```{r}
+library(scater)
+library(patchwork)
+harmony_integrated <- readRDS("../data/kidney/kidney-map/integrated_data/harmony_integrated.rds")
+
+plotReducedDim(harmony_integrated, 
+               dimred = "TSNE", 
+               colour_by = "cell_type", 
+               text_by = "cell_type", 
+               text_size = 2,
+               point_size = 0.2) +
+    theme(legend.position = "none") +
+
+plotReducedDim(harmony_integrated, 
+               dimred = "TSNE", 
+               colour_by = "geo_accession", 
+               text_by = "cell_type", 
+               text_size = 2,
+               point_size = 0.2) +
+    scale_color_discrete(name = "dataset") +
+    guides(color = guide_legend(override.aes = list(size = 2))) +
+    theme(legend.position = "right") +
+
+plotReducedDim(harmony_integrated, 
+               dimred = "TSNE", 
+               colour_by = "location", 
+               text_by = "cell_type", 
+               text_size = 2,
+               point_size = 0.2) +
+    scale_color_discrete(name = "region", labels = c("Cortex", "inner medulla", "outer medulla", "paravertebral")) +
+    guides(color = guide_legend(override.aes = list(size = 2))) +
+    theme(legend.position = "right") + 
+    plot_layout(ncol = 1)
+
+ggsave("../data/kidney/kidney-map/results/integration_maps/harmony_integrated.pdf", 
+       height = 15, width = 7)
+```
 
 
 # Integration with RISC
@@ -169,25 +207,74 @@ library(ggplot2)
 library(patchwork)
 DimPlot(sces, 
         slot = "cell.tsne", 
-<<<<<<< HEAD
         # colFactor = "mito_percent", 
         colFactor = "mito_percent",
         label = F, 
         # label.font = 2, 
-=======
         colFactor = "cell_type", 
         label = T, 
         label.font = 2, 
->>>>>>> b02cb0408f3c8e5d545c344ee5979ed51e8c5795
         adjust.label = 0) +
     theme(legend.position = "none") 
 
 
-<<<<<<< HEAD
 ggsave("results/figures/RISC_TSNE_location.pdf")
-=======
 saveRDS(p, "results/figures/RISC_TSNE_location.rds")
->>>>>>> b02cb0408f3c8e5d545c344ee5979ed51e8c5795
+```
+
+
+```{r}
+library(patchwork)
+library(dplyr)
+library(ggplot2)
+
+RISC_integrated <- readRDS("../data/kidney/kidney-map/integrated_data/RISC_integrated.rds")
+
+RISC_integrated_df <- left_join(RISC_integrated@coldata, 
+                                RISC_integrated@DimReduction$cell.tsne %>% as.data.frame() %>% tibble::rownames_to_column("Barcode"))
+RISC_integrated_df <- transform(RISC_integrated_df, 
+                                Set = sapply(RISC_integrated_df$Set, function(x){
+                                             switch(as.character(x), 
+                                                    "Set1" = "GSE129798", 
+                                                    "Set2" = "GSE146912", 
+                                                    "Set3" = "GSEGSE175421", 
+                                                    "Set4" = "GSE78845")
+                                         })) 
+
+cell_location <- RISC_integrated_df %>% 
+    group_by(cell_type) %>% 
+    summarise(x = median(tSNE1), 
+              y = median(tSNE2))
+
+p1 <- RISC_integrated_df %>% 
+    ggplot(aes(tSNE1, tSNE2)) +
+    geom_point(aes(color = cell_type), size = 0.2) +
+    geom_text(data = cell_location, aes(x, y, label = cell_type), size = 2) +
+    theme_classic() +
+    theme(legend.position = "none")
+
+p2 <- RISC_integrated_df %>% 
+    ggplot(aes(tSNE1, tSNE2)) +
+    geom_point(aes(color = Set), size = 0.2) +
+    geom_text(data = cell_location, aes(x, y, label = cell_type), size = 2) +
+    scale_color_discrete(name = "dataset") +
+    theme_classic() +
+    theme(legend.position = "right") +
+    guides(color = guide_legend(override.aes = list(size = 2)))
+
+p3 <- RISC_integrated_df %>% 
+    ggplot(aes(tSNE1, tSNE2)) +
+    geom_point(aes(color = location), size = 0.2) +
+    geom_text(data = cell_location, aes(x, y, label = cell_type), size = 2) +
+    scale_color_discrete(name = "region", labels = c("Cortex", "inner medulla", "outer medulla", "paravertebral")) +
+    theme_classic() +
+    theme(legend.position = "right") +
+    guides(color = guide_legend(override.aes = list(size = 2)))
+
+p1 + p2 + p3 + plot_layout(ncol = 1) 
+
+ggsave("../data/kidney/kidney-map/results/integration_maps/RISC_integrated.pdf", 
+       height = 15, width = 7)
 ```
 
 
@@ -811,6 +898,46 @@ plotTSNE(combined_sces,
 ```
 
 
+```{r}
+library(patchwork)
+library(scater)
+fastMM_integrated <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+
+plotReducedDim(fastMM_integrated, 
+               dimred = "TSNE", 
+               colour_by = "cell_type", 
+               text_by = "cell_type", 
+               text_size = 2, 
+               point_size = 0.2) +
+    theme(legend.position = "none") +
+
+plotReducedDim(fastMM_integrated, 
+               dimred = "TSNE", 
+               colour_by = "geo_accession", 
+               text_by = "cell_type", 
+               text_size = 2, 
+               point_size = 0.2) +
+    scale_color_discrete(name = "dataset") +
+    theme(legend.position = "right") +
+    guides(color = guide_legend(override.aes = list(size = 2))) +
+
+
+plotReducedDim(fastMM_integrated, 
+               dimred = "TSNE", 
+               colour_by = "location", 
+               text_by = "cell_type", 
+               text_size = 2, 
+               point_size = 0.2) +
+    scale_color_discrete(name = "region", labels = c("Cortex", "outer medulla", "inner medulla", "paravertebral")) +
+    theme(legend.position = "right") +
+    guides(color = guide_legend(override.aes = list(size = 2))) +
+    plot_layout(ncol = 1)
+
+ggsave("../data/kidney/kidney-map/results/integration_maps/fastMNN_integrated.pdf", 
+       height = 15, width = 7)
+```
+
+
 
 # Integration with Seurat
 ```{r}
@@ -863,6 +990,46 @@ kidney_integrated <- RunPCA(kidney_integrated, verbose = TRUE) %>%
 saveRDS(kidney_integrated, "../data/kidney/kidney-map/integrated_data/Seurat_integrated.rds")
 ```
 
+```{r}
+library(Seurat)
+library(patchwork)
+library(RColorBrewer)
+library(ggplot2)
+
+Seurat_integrated <- readRDS("../data/kidney/kidney-map/integrated_data/Seurat_integrated.rds")
+cols <- colorRampPalette(colors = brewer.pal(9, "Set1"))(length(unique(Seurat_integrated[[]]$cell_type)))
+names(cols) <- Seurat_integrated[[]]$cell_type %>% unique
+
+DimPlot(Seurat_integrated, 
+        cols = cols, 
+        group.by = "cell_type",
+        label = T, 
+        label.size = 2, 
+        reduction = "tsne") +
+    theme(legend.position = "none") +
+    ggtitle(label = NULL)
+
+DimPlot(Seurat_integrated, 
+        cols = cols, 
+        group.by = "cell_type",
+        label = T, 
+        label.size = 2, 
+        reduction = "tsne") +
+    theme(legend.position = "none") +
+    ggtitle(label = NULL)
+
+
+DimPlot(Seurat_integrated, 
+        cols = cols, 
+        group.by = "cell_type",
+        label = T, 
+        label.size = 2, 
+        reduction = "tsne") +
+    theme(legend.position = "none") +
+    ggtitle(label = NULL)
+
+Seurat_integrated[[]] %>% table(useNA = "ifany")
+```
 
 
 
