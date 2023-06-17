@@ -148,18 +148,17 @@ source("functions/idconv.R")
 library(patchwork)
 plotReducedDim(glomer_sce, 
                dimred = "TSNE", 
-               colour_by = idconv("Pax8"),
+               colour_by = idconv("Cdh5"),
                # colour_by = "label",
                text_by = "label", 
                point_size = 0.4)
-
 ```
 
 ```{r}
 # cell type annotation
 cell_type <- c("1" = "Mesangial Cells A", 
                "2" = "Parietal Epithelial", 
-               "3" = "Afferent/Efferent Endothelial",
+               "3" = "Endothelial",
                "4" = "Mesangial Cells B",
                "5" = "Podocyte", 
                "6" = "Podocyte",

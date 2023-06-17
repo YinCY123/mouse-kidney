@@ -21,9 +21,8 @@ sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rd
 colData(sces)$level1_cluster <- map_vec(colData(sces)$cell_type, .f = function(x){
     switch(x, 
            "Endothelial" = "Endothelium", 
-           "Afferent/Efferent Endothelial" = "Endothelium", 
            "Glomerular Endothelial" = "Endothelium", 
-           "Spinal Endothelial" = "Endothelium", 
+           "paravertebral Endothelial" = "Endothelium", 
            "Parietal Epithelial" = "Parietal Epithelial",
            "B Cells" = "Immune", 
            "Cd4 T Cells" = "Immune", 
@@ -70,9 +69,8 @@ sces$level1_cluster <- factor(sces$level1_cluster,
 colData(sces)$level2_cluster <- sapply(colData(sces)$cell_type, FUN = function(x){
     switch(x, 
            "Endothelial" = "Endothelium", 
-           "Afferent/Efferent Endothelial" = "Endothelium", 
            "Glomerular Endothelial" = "Endothelium", 
-           "Spinal Endothelial" = "Endothelium", 
+           "paravertebral Endothelial" = "Endothelium", 
            "Parietal Epithelial" = "Parietal Epithelial",
            "B Cells" = "B Cells", 
            "Cd4 T Cells" = "T Cells", 
@@ -122,8 +120,8 @@ sces$level2_cluster <- factor(sces$level2_cluster,
 
 # level 3 cluster
 sces$level3_cluster <- factor(sces$cell_type, 
-                              levels = c("Endothelial", "Afferent/Efferent Endothelial", "Glomerular Endothelial", 
-                                         "Spinal Endothelial", "Parietal Epithelial", "PTS1", 
+                              levels = c("Endothelial", "Glomerular Endothelial", 
+                                         "paravertebral Endothelial", "Parietal Epithelial", "PTS1", 
                                          "PTS2", "PTS3", "LOH_DTL1", "LOH_DTL2", "LOH_DTL3", "LOH_ATL", 
                                          "LOH_MTAL", "LOH_CTAL", "DCT", "CNT", "CCD_IC", "OMCD_IC", 
                                          "IMCD_IC", "CCD_PC", "OMCD_PC", "IMCD_PC", 
@@ -141,19 +139,19 @@ saveRDS(sces, "../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds"
 ```{r}
 levels_relationship <- data.frame(
     level0_cell_types = "kidney",
-    level1_cell_types = c(rep("Endothelium", 4), "Parietal Epithelial ", rep("Proximal Tubule", 3),
+    level1_cell_types = c(rep("Endothelium", 3), "Parietal Epithelial ", rep("Proximal Tubule", 3),
                           rep("LOH", 6), rep("Distal Tubule", 2), rep("Collecting Duct", 6), 
                           rep("Interstitial", 6), rep("Immune", 7), rep("Neurons", 2), rep("Glia", 3)),
     
-    level2_cell_types = c(rep("Endothelium ", 4), "Parietal  Epithelial ", rep("Proximal Tubule ", 3), 
+    level2_cell_types = c(rep("Endothelium ", 3), "Parietal  Epithelial ", rep("Proximal Tubule ", 3), 
                           rep("dLOH", 3), rep("aLOH", 3), rep("Distal Tubule ", 2), rep("CD_IC", 3), 
                           rep("CD_PC", 3), "Fibroblast", "VSMC", "Pericytes", rep("Mesangial Cells", 2),
                           "Podocytes", "Monocytes", "Dendritic Cells", "Macrophages", 
                           "NK Cells", rep("T Cells", 2), "B Cells", "Sensory Neurons", 
                           "Sympathetic Neurons", rep("Satellite Glia", 2), "Schwann Cells"),
     
-    level3_cell_types = c("Endothelial", "Afferent/Efferent Endothelial", "Glomerular Endothelial", 
-                          "Spinal Endothelial", " Parietal Epithelial  ", "PTS1", 
+    level3_cell_types = c("Endothelial", "Glomerular Endothelial", 
+                          "paravertebral Endothelial", " Parietal Epithelial  ", "PTS1", 
                           "PTS2", "PTS3", "LOH_DTL1", "LOH_DTL2", "LOH_DTL3", "LOH_ATL", 
                           "LOH_MTAL", "LOH_CTAL", "DCT", "CNT", "CCD_IC", "OMCD_IC", 
                           "IMCD_IC", "CCD_PC", "OMCD_PC", "IMCD_PC", 
@@ -243,34 +241,23 @@ fmarker3 <- findMarkers(sces,
 saveRDS(fmarker3, "../data/kidney/kidney-map/results/markers/level3_markers.rds")
 ```
 
+
 ```{r}
-fmarker3 <- readRDS("../data/kidney/kidney-map/results/markers/level3_markers.rds")
-fmarker3 %>% names
-source("functions/idconv.R")
-fmarker4[[16]] %>% rownames() %>% head(50) %>% idconv(from_type = "GENEID", to_type = "SYMBOL")
+fmarker1 %>% names
+fmarker1[[5]] %>% rownames() %>% head(50) %>% idconv(from_type = "GENEID", to_type = "SYMBOL", db = "mouse")
+idconv("ENSMUSG00000036896", from_type = "GENEID", to_type = "SYMBOL", db = "mouse")
 ```
 
 ```{r}
-plotExpression(sces, 
-               # features = fmarker4[[7]] %>% rownames() %>% .[1:50],
-               features = idconv("Dkk1"),
-               x = "level2_cluster", 
-               ncol = 2) +
-    theme(axis.text.x = element_text(angle = -60, hjust = 0, vjust = 0.5))
-
-ggsave("find_markers.pdf", height = 100, width = 15, limitsize = F)
-idconv("ENSMUSG00000005716", from_type = "GENEID", to_type = "SYMBOL")
-```
-
-```{r}
-for(name in names(fmarker2)){
+for(name in names(fmarker1)){
     plotExpression(sces, 
-                   features = fmarker2[[name]] %>% rownames() %>% .[1:50], 
-                   x = "level2_cluster", 
+                   # features = fmarker1[[name]] %>% rownames() %>% .[1:50], 
+                   features = idconv("H2-Q6", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+                   x = "level1_cluster", 
                    ncol = 2) +
         theme(axis.text.x = element_text(angle = -60, hjust = 0, vjust = 0.5))
     
-    ggsave(paste("level2_clusters/", name, "_cluster.pdf", sep = ""), height = 100, width = 10, limitsize = F)
+    ggsave(paste("level1_clusters/", name, "_cluster.pdf", sep = ""), height = 100, width = 10, limitsize = F)
 }
 ```
 
@@ -293,18 +280,32 @@ marker_themes <- theme(panel.grid.minor = element_blank(),
 level1_markers <- list(
     "Endothelium" = c("Pecam1", "Ly6c1", "Kdr", "Cdh5", "Flt1", "Emcn", "Sox18",
                       "Egfl7", "Gimap6", "Fabp4", "Esam", "Rsad2", "Adgrl4", 
-                      'Cd300lg', "Ctla2a", "Icam2", "Fam167b", "Mmrn2", "Tek", "Ramp3", "Tie1"),
-    "Parietal Epithelial" = c("Cp", "C3", "Efemp1", "Stc2", "Ackr3"),
-    "Proximal Tubule" = c("Slc34a1", "Acsm2", "Miox", "Ass1", "Akr1c21", "Keg", "Spink1", "Fbp1", "Ttc36"),
-    "LOH" = c("Slc12a1", "Sptssb", "Slc5a3", "Kng2", "Bok", "Bst"), 
-    "Distal Tubule" = c("Slc12a3", "Pgam2", "Tmem52b", "Emx1", "Klk1", "Calb1", "S100g"),
-    "Collecting Duct" = c("Aqp2", "Aqp3", "Aqp4", "Avpr2", "Hsd11b2", "Spink8", "Ptger1", "Muc1"),
-    "Interstitial" = c("Selenop", "Cdkn1c", "Gpx4-ps2", "Synpo", "Clic3", "Mafb", "H2-Q6", "Dpp4", "Tcf21"),
+                      'Cd300lg', "Ctla2a", "Icam2", "Fam167b", "Mmrn2", "Tek", 
+                      "Ramp3", "Tie1"),
+    "Parietal Epithelial" = c("Stc2","C3", "Cp"),
+    "Proximal Tubule" = c("Slc34a1", "Lrp2", "Slc27a2", "Acsm2", "Miox", 
+                          "Ass1", "Akr1c21", "Keg1", "Spink3", 
+                          "Fbp1", "Ttc36", "Guca2b", "Fut9", 
+                          "Ugt2b38", "Slc4a4", "Dnase1", "Khk", 
+                          "Pecr", "Pah", "Slc22a30", "Slc5a2", 
+                          "Acy3", "Sord", "Cyp2j5", "Pck1", "Pdzk1"),
+    "LOH" = c("Slc12a1", "Sptssb", "Slc5a3", "Bok"), 
+    "Distal Tubule" = c("Slc12a3", "Calb1", "Pgam2", "Pvalb", 
+                        "Tmem52b", "Clcnkb", "Kcnj1", "Emx1", "Klk1"),
+    "Collecting Duct" = c("Aqp2", "Aqp3", "Aqp4", "Avpr2", "Hsd11b2", 
+                          "Spink8", "Ptger1", "Muc1", "Muc20"),
+    "Interstitial" = c("Selenop", "Sepp1", "Cdkn1c", "Synpo", "Gpx4-ps2", 
+                       "Synpo", "Clic3", "Mafb", "H2-Q6", "Dpp4", "Tcf21"),
     "Neurons" = c("Nefl", "Snap25", "Stmn2", "Uchl1", "Tppp3", "Prph", 
                   "Nefm", "Nefh", "Tubb3", "Stmn3", "Pcsk1n", "Gng3", 
-                  "Map1b", "Ndrg4", "Nefm", "Snap25", "Rtn1", "Acot7", "Snrpn", "Gng3"),
-    "Glia" = c("Plp1", "Mbp", "Gpm6b", "Mpz", "Cnp", "Art3"),
-    "Immune" = c("Ptprc", "Lcp1", "Laptm5", "Coro1a", "Ctss", "Cd52", "Cd53", "Cd48")
+                  "Map1b", "Ndrg4", "Nefm", "Snap25", "Rtn1", "Acot7", 
+                  "Snrpn", "Gng3", "Ywhag", "Zwint", "Meg3", "Pirt"),
+    "Glia" = c("Plp1", "Mbp", "Gpm6b", "Mpz", "Cnp", "Art3", "Cmtm5", 
+               "Atp1a2", "Fabp7", "Plekhb1", "Sfrp5", "Ttyh1", "Sema3b", 
+               "Lpar1", "Vwa1", "Kcna1", "Hmgcs2", "Mmd2"),
+    "Immune" = c("Ptprc", "Lcp1", "Laptm5", "Coro1a", "Ctss", "Cd52", 
+                 "Cd53", "Cd48", "H2-Aa", "H2-Eb1", "H2-DMa", "Tyrobp", 
+                 "Fcer1g", "Lyz2", "Rac2")
 )
 
 level1_df <- makePerCellDF(sces, features = idconv(sapply(level1_markers, "[[", 1)), use.dimred = F) %>% 
@@ -476,7 +477,6 @@ sces_human <- SingleCellExperiment(assays = list(counts = cs, logcounts = lc),
                                    colData = colData(sces))
 sces_human %>% rowData()
 saveRDS(sces_human, "../data/kidney/kidney-map/integrated_data/fastMNN_integrated_human.rds")
-
 
 lc <- lc %>% as.matrix %>% as.data.frame() %>% tibble::rownames_to_column("Gene")
 
@@ -1815,8 +1815,8 @@ ggsave("../data/kidney/kidney-map/results/cell_cell_communication/sympathetic_to
        width = 10)
 ```
 
-
 ## neurons secreted proteins
+
 ```{r}
 library(dplyr)
 library(tidyr)
@@ -1832,6 +1832,3 @@ means_long %>% dplyr::filter((receptor_a == "False" & receptor_b == "False") & s
 ```{r}
 complex_input["integrin_a2b1_complex", ]
 ```
-
-
-

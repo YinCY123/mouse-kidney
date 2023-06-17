@@ -183,17 +183,17 @@ colData(drg_sce)$cell_type <- sapply(colData(drg_sce)$clusters,
                                                    "5" = "Satellite Glia A", 
                                                    "6" = "Schwann Cells", 
                                                    "7" = "Schwann Cells", 
-                                                   "8" = "Spinal Endothelial", 
+                                                   "8" = "paravertebral Endothelial", 
                                                    "9" = "Sensory Neurons", 
-                                                   "10" = "Spinal Endothelial")
+                                                   "10" = "paravertebral Endothelial")
                                         })
 colData(drg_sce)$cell_type %>% table
 source("functions/idconv.R")
 plotTSNE(drg_sce, 
-         colour_by = "cell_type",
-         # colour_by = idconv("Calca"),
+         # colour_by = "cell_type",
+         colour_by = idconv("Th"),
          point_size = 0.5, 
-         text_by = "cell_type")
+         text_by = "clusters")
 saveRDS(drg_sce, "../data/kidney/kidney-map/GSE175421/drg_sce.rds")
 ```
 
@@ -284,19 +284,18 @@ library(janitor)
 
 run_info <- read.table("data/GSE78845_SraRunTable.txt", sep = ",", header = TRUE) %>% 
     clean_names()
-selected_vars <- c("run", "cell_type", "celltype_identifier", 
-                   "sex", "source_name", "age")
-run_info <- run_info %>% select(selected_vars) %>% 
-    rename(cell_ids = "run")
+selected_vars <- c("run", "cell_type", "celltype_identifier", "source_name", "age")
+run_info <- run_info %>% dplyr::select(selected_vars) %>% 
+    dplyr::rename(cell_ids = "run")
 run_info$cell_type <- ifelse(run_info$cell_type == "sympathetic neuronal cells", "Sympathetic Neurons", run_info$cell_type)
-run_info$location <- "Spine"
+run_info$location <- "paravertebral"
 rownames(run_info) <- run_info$cell_ids
 
 feature_counts <- readRDS("../data/kidney/kidney-map/GSE78845/feature_counts.rds")
 gene_df <- data.frame(ensembl = rownames(feature_counts$counts))
 
 library(AnnotationHub)
-ah <- AnnotationHub()
+ah <- AnnotationHub(localHub = TRUE)
 query(ah, c("EnsDb", "Mus musculus"))
 ensdb <- ah[["AH104895"]]
 
@@ -310,6 +309,8 @@ mtx <- feature_counts$counts
 mtx[1:10, 1:5]
 colnames(mtx) <- gsub(".bam", "", colnames(mtx))
 
+ids <- match(rownames(run_info), colnames(mtx))
+mtx <- mtx[, ids]
 
 library(SingleCellExperiment)
 library(Matrix)
@@ -375,7 +376,7 @@ reducedDim(sym_sce, "PCA") <- npcs[, 1:elbow]
 set.seed(107)
 sym_sce <- runTSNE(sym_sce, dimred = "PCA", perplexity = 10)
 
-source("R/idconv.R")
+source("functions/idconv.R")
 plotTSNE(sym_sce, 
          # colour_by = "qclusters", 
          colour_by = idconv("Dbh"))
