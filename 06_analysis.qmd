@@ -131,6 +131,7 @@ sces$level3_cluster <- factor(sces$cell_type,
                                          "Sensory Neurons", "Sympathetic Neurons", 
                                          "Satellite Glia A", "Satellite Glia B", "Schwann Cells"))
 
+sces$location <- factor(sces$location, levels = c("Cortex", "outer medulla", "inner medulla", "paravertebral"))
 saveRDS(sces, "../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
 ```
 
@@ -151,7 +152,7 @@ levels_relationship <- data.frame(
                           "Sympathetic Neurons", rep("Satellite Glia", 2), "Schwann Cells"),
     
     level3_cell_types = c("Endothelial", "Glomerular Endothelial", 
-                          "paravertebral Endothelial", " Parietal Epithelial  ", "PTS1", 
+                          "paravertebral Endothelial", "Parietal  Epithelial  ", "PTS1", 
                           "PTS2", "PTS3", "LOH_DTL1", "LOH_DTL2", "LOH_DTL3", "LOH_ATL", 
                           "LOH_MTAL", "LOH_CTAL", "DCT", "CNT", "CCD_IC", "OMCD_IC", 
                           "IMCD_IC", "CCD_PC", "OMCD_PC", "IMCD_PC", 
@@ -216,7 +217,7 @@ fmarker1 <- findMarkers(sces,
                         min.prop = 0.25, 
                         direction = "up", 
                         subset.row = hvgs, 
-                        lfc = log(2, 2))
+                        lfc = 1)
 saveRDS(fmarker1, "../data/kidney/kidney-map/results/markers/level1_markers.rds")
 
 set.seed(105)
@@ -227,7 +228,7 @@ fmarker2 <- findMarkers(sces,
                         min.prop = 0.25, 
                         direction = "up",
                         subset.row = hvgs, 
-                        lfc = log(1.5, 2))
+                        lfc = 1)
 saveRDS(fmarker2, "../data/kidney/kidney-map/results/markers/level2_markers.rds")
 
 set.seed(106)
@@ -237,31 +238,75 @@ fmarker3 <- findMarkers(sces,
                         pval.type = "all", 
                         min.prop = 0.1, 
                         direction = "up", 
-                        subset.row = hvgs)
+                        subset.row = hvgs, 
+                        lfc = 0)
 saveRDS(fmarker3, "../data/kidney/kidney-map/results/markers/level3_markers.rds")
 ```
 
-
 ```{r}
-fmarker1 %>% names
-fmarker1[[5]] %>% rownames() %>% head(50) %>% idconv(from_type = "GENEID", to_type = "SYMBOL", db = "mouse")
-idconv("ENSMUSG00000036896", from_type = "GENEID", to_type = "SYMBOL", db = "mouse")
+source("functions/idconv.R")
+fmarker3 <- readRDS("../data/kidney/kidney-map/results/markers/level3_markers.rds")
+fmarker3 %>% names
+fmarker3[[4]] %>% rownames() %>% head(50) %>% idconv(from_type = "GENEID", to_type = "SYMBOL", db = "mouse")
+
+idconv("ENSMUSG00000059336", from_type = "GENEID", to_type = "SYMBOL", db = "mouse")
 ```
 
 ```{r}
 for(name in names(fmarker1)){
     plotExpression(sces, 
-                   # features = fmarker1[[name]] %>% rownames() %>% .[1:50], 
-                   features = idconv("H2-Q6", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+                   features = fmarker1[[name]] %>% rownames() %>% .[1:50],
+                   # features = idconv("H2-Q6", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
                    x = "level1_cluster", 
                    ncol = 2) +
         theme(axis.text.x = element_text(angle = -60, hjust = 0, vjust = 0.5))
     
     ggsave(paste("level1_clusters/", name, "_cluster.pdf", sep = ""), height = 100, width = 10, limitsize = F)
 }
+
+for(name in names(fmarker2)){
+    plotExpression(sces, 
+                   features = fmarker2[[name]] %>% rownames() %>% .[1:50],
+                   # features = idconv("H2-Q6", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+                   x = "level2_cluster", 
+                   ncol = 2) +
+        theme(axis.text.x = element_text(angle = -60, hjust = 0, vjust = 0.5))
+    
+    ggsave(paste("level2_clusters/", name, "_cluster.pdf", sep = ""), height = 100, width = 10, limitsize = F)
+}
+
+for(name in names(fmarker3)){
+    plotExpression(sces, 
+                   features = fmarker3[[name]] %>% rownames() %>% .[1:50],
+                   # features = idconv("H2-Q6", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+                   x = "level3_cluster", 
+                   ncol = 2) +
+        theme(axis.text.x = element_text(angle = -60, hjust = 0, vjust = 0.5))
+    
+    ggsave(paste("level3_clusters/", name, "_cluster.pdf", sep = ""), height = 100, width = 10, limitsize = F)
+}
+
 ```
 
 ## plot marker genes
+
+```{r}
+library(patchwork)
+plotTSNE(sces, 
+         # colour_by = "cell_type",
+         colour_by = idconv("Muc20"),
+         text_by = "cell_type", 
+         text_size = 2,
+         point_size = 0.2) +
+    theme(legend.position = "none") +
+    
+plotTSNE(sces, 
+         colour_by = "location",
+         # colour_by = idconv("Aqp1"),
+         text_by = "cell_type", 
+         text_size = 2,
+         point_size = 0.2)
+```
 
 ### level 1 markers
 
@@ -289,20 +334,23 @@ level1_markers <- list(
                           "Ugt2b38", "Slc4a4", "Dnase1", "Khk", 
                           "Pecr", "Pah", "Slc22a30", "Slc5a2", 
                           "Acy3", "Sord", "Cyp2j5", "Pck1", "Pdzk1"),
-    "LOH" = c("Slc12a1", "Sptssb", "Slc5a3", "Bok"), 
-    "Distal Tubule" = c("Slc12a3", "Calb1", "Pgam2", "Pvalb", 
-                        "Tmem52b", "Clcnkb", "Kcnj1", "Emx1", "Klk1"),
+    "LOH" = c("Slc12a1", "Sptssb", "Slc5a3", "Bst1", "Bok"), 
+    "Distal Tubule" = c("Slc12a3", "Calb1", "Pgam2", "Pvalb", "Kng2",
+                        "Tmem52b", "Clcnkb", "Kcnj1", "Emx1", "Klk1", 
+                        "Mt2", "Wnk4"),
     "Collecting Duct" = c("Aqp2", "Aqp3", "Aqp4", "Avpr2", "Hsd11b2", 
-                          "Spink8", "Ptger1", "Muc1", "Muc20"),
-    "Interstitial" = c("Selenop", "Sepp1", "Cdkn1c", "Synpo", "Gpx4-ps2", 
-                       "Synpo", "Clic3", "Mafb", "H2-Q6", "Dpp4", "Tcf21"),
+                          "Spink8", "Ptger1", "Muc1", "Muc20", "Fxyd4"),
+    "Interstitial" = c("Sepp1", "Selenop", "Cdkn1c", "Gpx4-ps2", 
+                       "Synpo", "Clic3", "Mafb", "H2-Q6", "Dpp4", 
+                       "Tcf21", "Rhpn1", "Gm13588", "H2bc4", "Cnn1", 
+                       "Septin11"),
     "Neurons" = c("Nefl", "Snap25", "Stmn2", "Uchl1", "Tppp3", "Prph", 
                   "Nefm", "Nefh", "Tubb3", "Stmn3", "Pcsk1n", "Gng3", 
                   "Map1b", "Ndrg4", "Nefm", "Snap25", "Rtn1", "Acot7", 
                   "Snrpn", "Gng3", "Ywhag", "Zwint", "Meg3", "Pirt"),
     "Glia" = c("Plp1", "Mbp", "Gpm6b", "Mpz", "Cnp", "Art3", "Cmtm5", 
                "Atp1a2", "Fabp7", "Plekhb1", "Sfrp5", "Ttyh1", "Sema3b", 
-               "Lpar1", "Vwa1", "Kcna1", "Hmgcs2", "Mmd2"),
+               "Lpar1", "Vwa1", "Kcna1", "Hmgcs2", "Mmd2", "Gpr37l1"),
     "Immune" = c("Ptprc", "Lcp1", "Laptm5", "Coro1a", "Ctss", "Cd52", 
                  "Cd53", "Cd48", "H2-Aa", "H2-Eb1", "H2-DMa", "Tyrobp", 
                  "Fcer1g", "Lyz2", "Rac2")
@@ -334,19 +382,26 @@ saveRDS(p_level1, "../data/kidney/kidney-map/results/markers/p_level1_markers.rd
 level2_markers <- list(
     "Endothelium" = c("Pecam1", "Ly6c1", "Kdr", "Cdh5", "Flt1", "Emcn", "Sox18",
                       "Egfl7", "Gimap6", "Fabp4", "Esam", "Rsad2", "Adgrl4", 
-                      'Cd300lg', "Ctla2a", "Icam2", "Fam167b", "Mmrn2", "Tek", "Ramp3", "Tie1"),
-    "Parietal Epithelial" = c("Cp", "C3", "Efemp1", "Stc2", "Ackr3"),
-    "Proximal Tubule" = c("Slc34a1", "Acsm2", "Miox", "Ass1", "Akr1c21", "Keg", "Spink1", "Fbp1", "Ttc36"),
-    "dLOH" = c("Bst1", "Pitx2"),
+                      'Cd300lg', "Ctla2a", "Icam2", "Fam167b", "Mmrn2", "Tek", 
+                      "Ramp3", "Tie1"),
+    "Parietal Epithelial" = c("Stc2","C3", "Cp"),
+    "Proximal Tubule" = c("Slc34a1", "Lrp2", "Slc27a2", "Acsm2", "Miox", 
+                          "Ass1", "Akr1c21", "Keg1", "Spink3", 
+                          "Fbp1", "Ttc36", "Guca2b", "Fut9", 
+                          "Ugt2b38", "Slc4a4", "Dnase1", "Khk", 
+                          "Pecr", "Pah", "Slc22a30", "Slc5a2", 
+                          "Acy3", "Sord", "Cyp2j5", "Pck1", "Pdzk1"),
+    "dLOH" = c("Bst1", "Pitx2", "Phgdh"),
     "aLOH" = c("Slc12a1", "Sptssb", "Ptger3"),
-    "Distal Tubule" = c("Slc12a3", "Calb1", "S100g", "Tmem52b", "Pgam2", "Emx1", "Cwh43"),
-    "CD_IC" = c("Atp6v1g3", "Atp6v0a4", "Atp6v1c2", "Atp6v1b1", "Atp6v0d2", "Rhbg", "Hepacam2", 
+    "Distal Tubule" = c("Slc12a3", "Calb1",  "Kl", "Sgms2", "Pvalb", "S100g", 
+                        "Tmem52b", "Pgam2", "Emx1", "Cwh43", "Abca13"),
+    "CD_IC" = c("Atp6v1g3", "Atp6v0a4", "Atp6v1c2", "Atp6v1b1", "Atp6v0d2", "Rhbg", "Car12", "Hepacam2", 
                 "Foxi1", "Tmem61", "Dmxl1", "Fam13a", "Rnf152", "Itpr2", "Oxgr1", "Aqp6",
                 "Slc4a1", "Slc26a4", "Hmx2", "Guca2a", "Serpinb9"),
     "CD_PC" = c("Aqp2", "Avpr2", "Aqp4", "Ptger1", "Muc20", "Muc1",
-                "Hsd11b2", "Aqp3"),
-    "Monocytes" = c("Sirpb1c",  "Plac8", "Lst1", "Msrb1", "Ccl6", "Cd300a", 
-                    "Ifitm6", "Clec4a1", "Clec4a3", "Hp"),
+                "Hsd11b2", "Aqp3", "Elf5"),
+    "Monocytes" = c("Sirpb1c",  "Plac8", "Ace","Clec4a3", "Ear2", "Lst1", "Msrb1", "Ccl6", "Cd300a", 
+                    "Ifitm6", "Clec4a1", "Hp"),
     "Dendritic Cells" = c("Cd209a", "Clec10a", "Slamf7"), 
     "Macrophages" = c("C1qa", "C1qb", "C1qc", "Cd14", "Lilra5", "Hpgd", "Adgre1", "P2ry6",
                       "Slamf9", "Cxcl16", "Cd72", "Ms4a7", "C5ar1", "C3ar1"), 
@@ -356,18 +411,24 @@ level2_markers <- list(
     "B Cells" = c("Cd79a", "Cd79b", "Ly6d", "Ms4a1", 'Fcmr', "Bank1", "Siglecg", 
                   'Mzb1', "Fcrla", "Fcer2a", "Cd19", "Tnfrsf13c", "Vpreb3", "Cd22", "Hvcn1"), 
     "Sensory Neurons" = c("Calca", "Fstl1", "Tac1", "Ano3", "Fgf13", "Ppp1r1c", "Calcb", "Rbfox3", "Grik1"),
-    "Sympathetic Neurons" = c("Dbh", "Npy", "Th", "Scn3a", "Maoa", "Slc18a2", "Slc7a14", "mt-Tp", "Ntrk1", "Phf24", 
-                              "Ache", "Plxna4", "Tcaf1", "Syn2", "Arfgef3", "Slc6a2", "Syt1", "Dgkh"),
-    "Satellite Glia" = c("Fabp7", "Ednrb", "Ttyh1", "Gpr37l1", "Mmd2", "Fbln2", "Entpd2", "Bcan"), 
+    "Sympathetic Neurons" = c("Dbh", "Npy", "Th", "Scn3a", "Maoa", "Slc18a2", 
+                              "Slc7a14", "mt-Tp", "Ntrk1", "Phf24", 
+                              "Ache", "Plxna4", "Tcaf1", "Syn2", "Arfgef3",
+                              "Slc6a2", "Syt1", "Dgkh"),
+    "Satellite Glia" = c("Fabp7", "Ednrb", "Ttyh1", "Gpr37l1", "Mmd2", "Matn2", 
+                         "Fbln2", "Entpd2", "Prss35", "Ntrk2", "Bcan"), 
     "Schwann Cells" = c("Ncmap", "Prx", "Secisbp2l", "Pllp", "Fam178b", "Ugt8a", "Ogn", 
                         "Fa2h", "Mlip", "Mag", "Slc36a2", "Mfap5", "Drp2"), 
-    "Pericytes" = c("Higd1b", "Ephx3", "Tbx3os1", "Cspg4", "Pdgfrb", "Ephx3", "Ngf", "1500009L16Rik"),
+    "Pericytes" = c("Rergl", "Or51e1", "Higd1b", "Notch3", "Akr1b7", "Rgs5", "Ephx3", "Tbx3os1", 
+                    "Cspg4", "Pdgfrb", "Map3k7cl", "Ngf", "Lmod1"),
     "VSMC" = c("Cnn1", "Nkx3-1", "Ptgis", "Pln", "Tcap", "Sh3bgr"),
     "Fibroblast" = c("Krt19", "Krt15", "Cbr2", "Upk1b", "Dcn", "Trim29",  "Krt5", "Egfl6",  "Gsdmc2"),
-    "Mesangial Cells" = c("Sfrp2", "Dkk2", "Septin4",  "Ccn2", "Adamts5", "Septin4", "Itga8", "Nt5e", "Cpm", "Ccdc80"),
-    "Podocyte" = c("Nphs2", "Clic3", "Nphs1", "Podxl", "Cldn5",  "Dpp4", "Mafb",
-                   "Hs3st6", "Tcf21", "H2-Q6", "Sema3g", 
-                   "Rhpn1", "Gm7658", "Ptpro", "Ripor1"))
+    "Mesangial Cells" = c("Sfrp2", "Dkk2", "Septin4",  "Ccn2", "Adamts5", "F2r", "Itga8", 
+                          "Ier5", "Nt5e", "Gdf10", "Scarf2", "Scn1b"),
+    "Podocyte" = c("Dpp4", "Clic3", "Mafb", "Pals1", "Gas1", "Tmem150c", 
+                    "H2-Q6", "Sema3g", "Hs3st6", "Nphs2", "Cldn5", "Tcf21",
+                    "Ptpro", "Clic5", "Nphs1",  "Thsd7a", 
+                   "Rhpn1", "Gm7658",  "Ripor1",  "Shisa3"))
 
 level2_df <- makePerCellDF(sces, features = idconv(sapply(level2_markers, "[[", 1)), use.dimred = F) %>% 
     pivot_longer(cols = starts_with("ENS"), names_to = "ensembl", values_to = "logcounts")
@@ -392,11 +453,17 @@ saveRDS(p_level2, "../data/kidney/kidney-map/results/markers/p_level2_markers.rd
 ### level 3 markers
 
 ```{r}
+sces$level3_cluster %>% levels()
 level3_markers <- list(
-    "Endothelium" = c("Pecam1"), 
-    "Parietal Epithelial" = c("ccdc198"), 
-    "Proximal Tubule" = c("Slc34a1"), 
-    "dLOH" = c("Bst1"), 
+    "Endothelial" = c("Pecam1"), 
+    "Glomerular Endothelial" = c("Pi16", "Gm49391", "Gm45837", "Gm49393"),
+    "Parietal Epithelial" = c("Stc2", "C3", "Cp"), 
+    "PTS1" = c("Slc5a2", "Slc5a12", "Spp2", "Gsta2"),
+    "PTS2" = c("Slc22a6"),
+    "PTS3" = c("Slc13a3"),
+    "LOH_DTL1" = c("Slc14a2"), 
+    "LOH_DTL2" = ,
+    "LOH_DTL3" = ,
     "aLOH" = c("Slc12a1"), 
     "Distal Tubule" = c("Slc12a3"), 
     "CD_IC" = c("Atp6v1g3"), 
@@ -404,7 +471,7 @@ level3_markers <- list(
     "Fibroblast" = c("Krt19"), 
     "VSMC" = c("Cnn1"), 
     "Pericytes" = c("Cspg4"), 
-    "Podocyte" = c("Clic3"), 
+    "Podocyte" = c("Dpp4"), 
     "Mesangial Cells A" = c("Cebpb"), 
     "Mesangial Cells B" = c("Rn7sk"), 
     "Sensory Neurons" = c("Calca"), 
@@ -484,7 +551,8 @@ fwrite(lc,
        "../data/kidney/kidney-map/cellphonedb_input/counts.csv", 
        row.names = F, quote = F, sep = ",")
 
-meta_file <- colData(sces) %>% as.data.frame() %>% 
+meta_file <- colData(sces) %>% 
+    as.data.frame() %>% 
     dplyr::rename("Cell" = "cell_ids") %>% 
     dplyr::select(Cell, level3_cluster) %>% 
     magrittr::set_colnames(value = c("cell", "cell_type"))
@@ -508,6 +576,7 @@ colData(sces) %>%
 # DEGs
 fmarker3 <- readRDS("../data/kidney/kidney-map/results/markers/level3_markers.rds")
 fmarker3 %>% names
+fmarker3[[1]]
 DEG_list <- vector(mode = "list", length = length(fmarker3))
 names(DEG_list) <- names(fmarker3)
 for(name in names(DEG_list)){
@@ -524,6 +593,14 @@ library(purrr)
 map_df(DEG_list, .f = dim) %>% rowSums()
 
 deg <- map_dfr(DEG_list, .f = bind_rows)
+deg <- convert_orthologs(gene_df = deg, 
+                         gene_input = "ensembl", 
+                         gene_output = "columns", 
+                         input_species = "mouse", 
+                         output_species = "human", 
+                         method = "gprofiler")
+
+deg <- deg %>% dplyr::select(cell_type, symbol  = ortholog_gene)
 write.table(deg, "../data/kidney/kidney-map/cellphonedb_input/DEG.csv", 
             row.names = F, 
             quote = F, 
@@ -545,7 +622,7 @@ db_utils.download_database("/home/yincy/git/data/cellphonedb/v4.1.0/", cpdb_vers
 
 ```{python}
 # analysis
-# only output mean expression of the interactions between two populations, which expressed at least a fraction of the cell.
+# only output mean expression of the interaction pairs between two populations, which expressed at least a fraction of the cell.
 from cellphonedb.src.core.methods import cpdb_analysis_method
 ?cpdb_analysis_method
 
@@ -599,14 +676,14 @@ library(tidyr)
 library(dplyr)
 library(stringr)
 
-means <- read.table("../data/kidney/kidney-map/results/cpdb_outs/analysis/simple_analysis_means_result_06_09_2023_00:41:28.txt", 
+means <- read.table("../data/kidney/kidney-map/results/cpdb_outs/analysis/simple_analysis_means_result_06_19_2023_09:31:45.txt", 
                     sep = "\t", 
                     header = TRUE, 
                     check.names = F)
-sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated_human.rds")
 
 # remove unlikely interactions
-# 1.Such as Spinal endothelial cells located at the paravertebral it's impossible to interact with renal tubule or colecting ducts.
+# 1.Such as paravertebral endothelial cells its impossible to interact with renal tubule or colecting ducts.
 # 2. self-interaction also removed  
 
 cell_types <- sces$level3_cluster %>% levels
@@ -614,17 +691,17 @@ cell_types <- sces$level3_cluster %>% levels
 # self-interaction
 rm1 <- paste(cell_types, cell_types, sep = "|")
 
-# spinal endothelial with non-neurons interaction
-rm2 <- c(paste("Spinal Endothelial", cell_types[-c(36:40)], sep = "|"), 
-         paste(cell_types[-c(36:40)], "Spinal Endothelial", sep = "|"))
+# paravertabral endothelial with non-neurons interaction
+rm2 <- c(paste("paravertebral Endothelial", cell_types[-c(35:39)], sep = "|"), 
+         paste(cell_types[-c(35:39)], "paravertebral Endothelial", sep = "|"))
 
 # satellite and schwann cells with non-neurons interaction, though minimal neurons might be  myelined, which may warped by some schwann cells, which makes it might has some interactions with renal cells, but this is too minimal, so this type of interaction also removed.  
-rm3 <- c(paste(grep("Satellite Glia A", cell_types, value = TRUE), cell_types[-c(4, 36:37)], sep = "|"), 
-         paste(cell_types[-c(4, 36:37)], grep("Satellite Glia A", cell_types, value = TRUE), sep = "|"), 
-         paste(grep("Satellite Glia B", cell_types, value = TRUE), cell_types[-c(4, 36:37)], sep = "|"), 
-         paste(cell_types[-c(4, 36:37)], grep("Satellite Glia B", cell_types, value = TRUE), sep = "|"), 
-         paste(grep("Schwann Cells", cell_types, value = TRUE), cell_types[-c(4, 36:37)], sep = "|"), 
-         paste(cell_types[-c(4, 36:37)], grep("Schwann Cells", cell_types, value = TRUE), sep = "|"))
+rm3 <- c(paste(grep("Satellite Glia A", cell_types, value = TRUE), cell_types[-c(4, 35:36)], sep = "|"), 
+         paste(cell_types[-c(4, 35:36)], grep("Satellite Glia A", cell_types, value = TRUE), sep = "|"), 
+         paste(grep("Satellite Glia B", cell_types, value = TRUE), cell_types[-c(4, 35:36)], sep = "|"), 
+         paste(cell_types[-c(4, 35:36)], grep("Satellite Glia B", cell_types, value = TRUE), sep = "|"), 
+         paste(grep("Schwann Cells", cell_types, value = TRUE), cell_types[-c(4, 35:36)], sep = "|"), 
+         paste(cell_types[-c(4, 35:36)], grep("Schwann Cells", cell_types, value = TRUE), sep = "|"))
 
 # glomerular endothelial unlikely have interactions with renal tubule or collecting duct
 rm4 <- c(paste("Glomerular Endothelial", grep("^(LOH|PTS|DCT|CNT|CCD|OMCD|IMCD)", cell_types, value = T), sep = "|"), 
@@ -637,15 +714,16 @@ rm5 <- c(paste("Mesangial Cells A", c(grep("^(LOH|PTS|DCT|CNT|CCD|OMCD|IMCD)", c
          paste(c(grep("^(LOH|PTS|DCT|CNT|CCD|OMCD|IMCD)", cell_types, value = T), "Endothelial"), "Mesangial Cells B", sep = "|"), 
          paste("Podocytes", c(grep("^(LOH|PTS|DCT|CNT|CCD|OMCD|IMCD)", cell_types, value = T), "Endothelial"), sep = "|"), 
          paste(c(grep("^(LOH|PTS|DCT|CNT|CCD|OMCD|IMCD)", cell_types, value = T), "Endothelial"), "Podocytes", sep = "|"))
-
-# Afferent/Efferent Endothelial unlikely interacts with LOH and collecting duct
-rm6 <- c(paste("Afferent/Efferent Endothelial", grep("^(LOH|OMCD|IMCD)", cell_types, value = TRUE), sep = "|"), 
-         paste(grep("^(LOH|OMCD|IMCD)", cell_types, value = TRUE), "Afferent/Efferent Endothelial", sep = "|"))
+# Parietal Epithelial unlikely has interactions with OMCD, IMCD, ATL, MTAL, DTL1, DTL2, DTL3, as Parietal Epithelial located mainly in the cortex
+rm6 <- c(paste("Parietal Epithelial", grep("^(OMCD|IMCD|_LOH_ATL|LOH_MTAL|LOH_DTL1|LOH_DTL2|LOHDTL3)", cell_types, value = TRUE), sep = "|"), 
+         paste(grep("^(OMCD|IMCD|_LOH_ATL|LOH_MTAL|LOH_DTL1|LOH_DTL2|LOHDTL3)", cell_types, value = TRUE), "Parietal Epithelial", sep = "|"))
 
 interaction_pairs_to_remove <- c(rm1, rm2, rm3, rm4, rm5, rm6) %>% unique()
 interaction_pairs_to_remove %>% str
+interaction_pairs_to_remove[!(interaction_pairs_to_remove %in% colnames(means))]
+
 means <- means %>% dplyr::select(!all_of(interaction_pairs_to_remove))
-means %>% dplyr::select(contains("Mesangial"))
+means %>% dplyr::select(contains("Epithelial"))
 means_long <- means %>% 
     pivot_longer(cols = grep("\\|", colnames(means), value = TRUE), 
                                      names_to = "cell_pairs", 
@@ -683,17 +761,17 @@ interactions <- means_long %>%
 rownames(interactions) <- interactions$cell_pair_ids
 
 
-m_n <- matrix(0, nrow = 40, ncol = 40, 
+m_n <- matrix(0, nrow = 39, ncol = 39, 
             dimnames = list(cell_types, cell_types))
 
-m_strength <- matrix(0, nrow = 40, ncol = 40, 
+m_strength <- matrix(0, nrow = 39, ncol = 39, 
                      dimnames = list(cell_types, cell_types))
 
-m_normalized_strength <- matrix(0, nrow = 40, ncol = 40, 
+m_normalized_strength <- matrix(0, nrow = 39, ncol = 39, 
                                 dimnames = list(cell_types, cell_types))
 
-for(i in 1:40){
-    for(j in 1:40){
+for(i in 1:39){
+    for(j in 1:39){
         dn = m_n[i,j,drop = F] %>% dimnames() %>% unlist() %>% sort %>% str_c(collapse = "@")
         for(n in rownames(interactions)){
             if(dn == n){
@@ -703,23 +781,23 @@ for(i in 1:40){
     }
 }
 
-for(i in 1:40){
-    for(j in 1:40){
+for(i in 1:39){
+    for(j in 1:39){
         dn = m_strength[i,j,drop = F] %>% dimnames() %>% unlist() %>% sort %>% str_c(collapse = "@")
         for(n in rownames(interactions)){
             if(dn == n){
-                m_strength[i, j] = interactions[n, "n"]
+                m_strength[i, j] = interactions[n, "strength"]
             }
         }
     }
 }
 
-for(i in 1:40){
-    for(j in 1:40){
+for(i in 1:39){
+    for(j in 1:39){
         dn = m_normalized_strength[i,j,drop = F] %>% dimnames() %>% unlist() %>% sort %>% str_c(collapse = "@")
         for(n in rownames(interactions)){
             if(dn == n){
-                m_normalized_strength[i, j] = interactions[n, "n"]
+                m_normalized_strength[i, j] = interactions[n, "normalized_strength"]
             }
         }
     }
@@ -759,15 +837,16 @@ dev.off()
 
 #### level 1 interactions of Neurons
 
-the interaction strength is defined by:\
-1. the sum of the mean expressions of the two clusters then normalized by the total number of interactions between the two clusters\
-2. or the number of total interactions between the two populations\
-3. the sum of the mean expression between those two populations\
+the interaction strength is defined by:  
+
+1. the number of total interactions between the two populations  
+2. the sum of the mean expression between those two populations  
+3. the sum of the mean expressions of the two clusters then normalized by the total number of interactions between the two clusters  
 
 ```{r}
 #| message: false
 #| label: level 1 interactions
-sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated_human.rds")
 level1 <- setNames(sces$level1_cluster, sces$level3_cluster)
 means_long <- means_long %>%
     mutate(cell_a = level1[cell_a],
@@ -809,8 +888,8 @@ neurons_interactions_level1 <- read.csv("../data/kidney/kidney-map/results/cell_
 pdf("../data/kidney/kidney-map/results/cell_cell_communication/level1_interactions.pdf", 
     height = 3, width = 8)
 par(mfrow = c(1, 3))
-circos.par(start.degree = -9,
-           gap.after = c(rep(15, 7), 30, 30, 15), 
+circos.par(start.degree = -17,
+           gap.after = c(rep(10, 7), 30, 30, 10), 
            canvas.ylim = c(-1, 1), canvas.xlim = c(-1, 1))
 order <- c("Endothelium", "Parietal Epithelial", "Proximal Tubule", 
            "LOH", "Distal Tubule", "Collecting Duct", "Interstitial", 
@@ -844,7 +923,7 @@ dev.off()
 #### level 1 interactions: sensory and sympathetic neurons
 
 ```{r}
-ns <- c(rep("Endothelium", 4), "Parietal Epithelial", rep("Proximal Tubule", 3), 
+ns <- c(rep("Endothelium", 3), "Parietal Epithelial", rep("Proximal Tubule", 3), 
         rep("LOH", 6), rep("Distal Tubule", 2), rep("Collecting Duct", 6), 
         rep("Interstitial", 6), rep("Immune", 7), "Sensory Neurons", "Sympathetic Neurons", 
         rep("Glia", 3))
@@ -889,13 +968,13 @@ neurons_interactions_level1.1 <- read.csv("../data/kidney/kidney-map/results/cel
 pdf("../data/kidney/kidney-map/results/cell_cell_communication/level1.1_interactions.pdf",
     height = 3, width = 8)
 par(mfrow = c(1, 3))
-circos.par(start.degree = -9,
-           gap.after = c(rep(15, 7), 30, 15, 30, 15), 
+circos.par(start.degree = -20,
+           gap.after = c(rep(10, 7), 30, 10, 30, 10), 
            canvas.ylim = c(-1, 1), canvas.xlim = c(-1, 1))
 order <- c("Endothelium", "Parietal Epithelial", "Proximal Tubule", 
            "LOH", "Distal Tubule", "Collecting Duct", "Interstitial", 
            "Immune", "Sensory Neurons", "Sympathetic Neurons", "Glia")
-grid.col <- colorRampPalette(colors = rainbow(9))(length(levels(sces$level1_cluster)) - 2)
+grid.col <- colorRampPalette(colors = rainbow(9))(length(levels(sces$level1_cluster)) - 1)
 grid.col <- append(grid.col, c("grey40", "grey40"), after = 8)
 names(grid.col) <- order
 
@@ -929,7 +1008,7 @@ dev.off()
 # level2 interactions strength
 level2 <- setNames(sces$level2_cluster, sces$level3_cluster)
 
-means_long <- readRDS("../data/kidney/kidney-map/results/cpdb_outs/analysis/means_long.rds")
+means_long <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/means_long.rds")
 means_long <- means_long %>% 
     mutate(cell_a = level2[cell_a], 
            cell_b = level2[cell_b])
@@ -958,7 +1037,6 @@ write.csv(neurons_interactions_level2,
           row.names = F, 
           quote = F)
 # manually place neurons to the second column
-neurons_interactions_level2 <- read.csv("../data/kidney/kidney-map/results/cell_cell_communication/level2_interactions.csv")
 ```
 
 ```{r}
@@ -966,11 +1044,12 @@ neurons_interactions_level2 <- read.csv("../data/kidney/kidney-map/results/cell_
 #| warning: false
 library(circlize)
 library(RColorBrewer)
+neurons_interactions_level2 <- read.csv("../data/kidney/kidney-map/results/cell_cell_communication/level2_interactions.csv")
 
 pdf("../data/kidney/kidney-map/results/cell_cell_communication/level2_interactions.pdf", 
     height = 3, width = 8)
 par(mfrow = c(1, 3))
-circos.par(start.degree = -11.5,
+circos.par(start.degree = -13,
            gap.after = c(rep(3, 18), 10, 3, 10, 3, 3),
            canvas.ylim = c(-1.2, 1.2), canvas.xlim = c(-1.2, 1.2))
 order <- sces$level2_cluster %>% levels()
@@ -1016,7 +1095,7 @@ dev.off()
 
 ```{r}
 #| label: level 3 interactions
-means_long <- readRDS("../data/kidney/kidney-map/results/cpdb_outs/analysis/means_long.rds")
+means_long <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/means_long.rds")
 
 means_long$cell_pair_ids <- means_long %>% 
     unite(col = "cell_pair_ids", cell_a, cell_b, sep = "@") %>% 
@@ -1052,14 +1131,14 @@ pdf("../data/kidney/kidney-map/results/cell_cell_communication/level3_interactio
     height = 3, width = 8)
 par(mfrow = c(1, 3))
 lim <- 1.5
-circos.par(start.degree = 1.5,
-           gap.after = c(rep(3, 34), 10, 3, 10, 3, 3, 3),
+circos.par(start.degree = -0.5,
+           gap.after = c(rep(3, 33), 10, 3, 10, 3, 3, 3),
            canvas.ylim = c(-lim, lim), canvas.xlim = c(-lim, lim), 
            cell.padding = rep(0, 4))
 order <- sces$level3_cluster %>% levels()
 names(order) <- order
 grid.col <- colorRampPalette(colors = rainbow(9))(length(levels(sces$level3_cluster)) - 2)
-grid.col <- append(grid.col, c("grey40", "grey40"), after = 35)
+grid.col <- append(grid.col, c("grey40", "grey40"), after = 34)
 names(grid.col) <- order
 
 for(i in 3:5){
@@ -1101,7 +1180,7 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 
-means_long <- readRDS("../data/kidney/kidney-map/results/cpdb_outs/analysis/means_long.rds")
+means_long <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/means_long.rds")
 
 # remove all secreted interactions
 means_long <- means_long %>% dplyr::filter(!(receptor_a == "False" & receptor_b == "False"))
@@ -1109,24 +1188,25 @@ means_long <- means_long %>% dplyr::filter(!(receptor_a == "False" & receptor_b 
 # neurons expressed receptors
 receptors_expressed_by_neurons_ids <- ((means_long$receptor_a == "True" & means_long$cell_a %in% c("Sympathetic Neurons", "Sensory Neurons")) | (means_long$receptor_b == "True" & means_long$cell_b %in% c("Sympathetic Neurons", "Sensory Neurons")))
 
-
-# receptors expressed by non-neurons and ligands expressed by neurons
-ligands_expressed_by_neurons_ids <- ((means_long$receptor_a == "False" & means_long$cell_a %in% c("Sympathetic Neurons", "Sensory Neurons")) | (means_long$receptor_b == "False" & means_long$cell_b %in% c("Sympathetic Neurons", "Sensory Neurons")) & (means_long$receptor_a == "True" | means_long$partner_b == "True"))
-
-receptors_expressed_by_neurons_ids %>% table; ligands_expressed_by_neurons_ids %>% table
-
-
 receptors_expressed_by_neurons <- means_long[receptors_expressed_by_neurons_ids, ]
 
 # for chordDiagram neurons expressed receptors
-source("functions/idconv.R")
-receptors_expressed_by_neurons %>% 
+# place receptors into the first column and ligands to the second column
+receptors_expressed_by_neurons <- receptors_expressed_by_neurons %>% 
     rowwise() %>% 
-    mutate(gene_a_receptor = ifelse(!grepl("^ENS", gene_a_receptor), 
-                                    str_split(gene_a_receptor, ",") %>% 
-                                        sapply(function(x){idconv(x, from_type = "UNIPROTID", to_type = "GENEID", db = "human")}) %>% str_c(collapse = ","), 
-                                    gene_a_receptor))
+    mutate(cell_a_receptor = ifelse(receptor_a == "True", cell_a, cell_b), 
+           cell_b_ligand = ifelse(receptor_b == "False", cell_b, cell_a),
+           
+           partner_a_receptor = ifelse(receptor_a == "True", partner_a, partner_b), 
+           partner_b_ligand = ifelse(receptor_b == "False", partner_b, partner_a), 
+           
+           gene_a_receptor = ifelse(receptor_a == "True", gene_a, gene_b),
+           gene_b_ligand = ifelse(receptor_b == "False", gene_b, gene_a)) %>% 
+    ungroup() %>% 
+    dplyr::select(matches("_receptor|_ligand"), mean_expression) %>% 
+    dplyr::relocate(cell_b_ligand, .before = 2) 
 
+receptors_expressed_by_neurons <- receptors_expressed_by_neurons %>% dplyr::filter(cell_a_receptor != cell_b_ligand)
 
 receptors_expressed_by_neurons <- receptors_expressed_by_neurons %>% 
     group_by(cell_a_receptor, cell_b_ligand) %>% 
@@ -1139,12 +1219,35 @@ receptors_expressed_by_neurons <- receptors_expressed_by_neurons %>%
 write.csv(receptors_expressed_by_neurons, 
           "../data/kidney/kidney-map/results/cell_cell_communication/receptors_expressed_by_neurons.csv", 
           row.names = F, quote = F)
+```
 
 
-#----------------#
+```{r}
+library(dplyr)
+library(tidyr)
+library(stringr)
 
+means_long <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/means_long.rds")
+
+# remove all secreted interactions
+means_long <- means_long %>% dplyr::filter(!(receptor_a == "False" & receptor_b == "False"))
+
+# receptors expressed by non-neurons and ligands expressed by neurons
+ligands_expressed_by_neurons_ids <- ((means_long$receptor_a == "False" & means_long$cell_a %in% c("Sympathetic Neurons", "Sensory Neurons")) | (means_long$receptor_b == "False" & means_long$cell_b %in% c("Sympathetic Neurons", "Sensory Neurons")) & (means_long$receptor_a == "True" | means_long$partner_b == "True"))
 
 ligands_expressed_by_neurons <- means_long[ligands_expressed_by_neurons_ids, ]
+
+ligands_expressed_by_neurons <- ligands_expressed_by_neurons %>% 
+    rowwise() %>% 
+    mutate(cell_a_receptor = ifelse(receptor_a == "True", cell_a, cell_b), 
+           partner_a_receptor = ifelse(receptor_a == "True", partner_a, partner_b), 
+           gene_a_receptor = ifelse(receptor_a == "True", gene_a, gene_b),
+           cell_b_ligand = ifelse(receptor_b == "False", cell_b, cell_a), 
+           partner_b_ligand = ifelse(receptor_b == "False", partner_b, partner_a), 
+           gene_b_ligand = ifelse(receptor_b == "False", gene_b, gene_a)) %>% 
+    ungroup() %>% 
+    dplyr::select(matches("_receptor|_ligand"), mean_expression) %>% 
+    dplyr::relocate(cell_b_ligand, .before = 2) 
 
 
 # remove self-interactions
@@ -1174,13 +1277,13 @@ pdf("../data/kidney/kidney-map/results/cell_cell_communication/receptors_express
 par(mfrow = c(1, 3))
 lim <- 1.5
 circos.par(start.degree = 1.5,
-           gap.after = c(rep(3, 34), 10, 3, 10, 3, 3, 3),
+           gap.after = c(rep(3, 33), 10, 3, 10, 3, 3, 3),
            canvas.ylim = c(-lim, lim), canvas.xlim = c(-lim, lim),  
            cell.padding = rep(0, 4))
 order <- sces$level3_cluster %>% levels()
 names(order) <- order
-grid.col <- colorRampPalette(colors = rainbow(9))(length(levels(sces$level3_cluster)) - 2)
-grid.col <- append(grid.col, c("grey40", "grey40"), after = 35)
+grid.col <- colorRampPalette(colors = brewer.pal(9,"Set1"))(length(levels(sces$level3_cluster)) - 2)
+grid.col <- append(grid.col, c("grey40", "grey40"), after = 34)
 names(grid.col) <- order
 
 for(i in 3:5){
@@ -1226,13 +1329,13 @@ pdf("../data/kidney/kidney-map/results/cell_cell_communication/ligands_expressed
 par(mfrow = c(1, 3))
 lim <- 1.5
 circos.par(start.degree = 1.5,
-           gap.after = c(rep(3, 34), 10, 3, 10, 3, 3, 3),
+           gap.after = c(rep(3, 33), 10, 3, 10, 3, 3, 3),
            canvas.ylim = c(-lim, lim), canvas.xlim = c(-lim, lim),  
            cell.padding = rep(0, 4))
 order <- sces$level3_cluster %>% levels()
 names(order) <- order
 grid.col <- colorRampPalette(colors = brewer.pal(9, "Set1"))(length(levels(sces$level3_cluster)) - 2)
-grid.col <- append(grid.col, c("grey40", "grey40"), after = 35)
+grid.col <- append(grid.col, c("grey40", "grey40"), after = 34)
 names(grid.col) <- order
 
 for(i in 3:5){
@@ -1278,7 +1381,7 @@ library(tidyr)
 library(dplyr)
 library(stringr)
 
-means_long <- readRDS("../data/kidney/kidney-map/results/cpdb_outs/analysis/means_long.rds")
+means_long <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/means_long.rds")
 
 # remove all secreted interactions
 means_long <- means_long %>% dplyr::filter(!(receptor_a == "False" & receptor_b == "False"))
@@ -1304,7 +1407,7 @@ ligands_expressed_by_neurons <- ligands_expressed_by_neurons %>%
 
 complex_input <- read.csv("../data/cellphonedb/v4.1.0/complex_input.csv") %>% tibble::column_to_rownames("complex_name")
 
-# convert ligand gene id to symbol id
+# convert ligand uniprot id to symbol id
 neurons_ligands <- ligands_expressed_by_neurons %>% 
     rowwise() %>% 
     mutate(gene_b_ligand = ifelse(grepl("^complex:", partner_b_ligand), 
@@ -1315,19 +1418,18 @@ neurons_ligands <- ligands_expressed_by_neurons %>%
 
 source("functions/idconv.R")
 neurons_ligands <- neurons_ligands %>% rowwise() %>% 
-    mutate(gene_b_ligand = ifelse(grepl("^ENSG", gene_b_ligand), 
-                                  idconv(gene_b_ligand, from_type = "GENEID", to_type = "SYMBOL", db = "human"), 
+    mutate(gene_b_ligand = ifelse(grepl("^simple:", partner_b_ligand), 
+                                  gene_b_ligand, 
                                   str_split(gene_b_ligand, ",") %>% 
                                       sapply(function(x){idconv(x, from_type = "UNIPROTID", to_type = "SYMBOL", db = "human")}) %>% 
                                       str_c(collapse = ",")))
 
 neurons_ligands %>% dplyr::filter(is.na(gene_b_ligand))
-neurons_ligands %>% dplyr::filter(grepl("^ENSG", gene_b_ligand))
 # manually convert CEL uniprot id to symbol id, this conversion was failed
 neurons_ligands$gene_b_ligand <- ifelse(is.na(neurons_ligands$gene_b_ligand), "CEL", neurons_ligands$gene_b_ligand)
 
 
-# convert receptors gene id to symbol id
+# convert receptors uniprot id to symbol id
 neurons_ligands <- neurons_ligands %>% 
     rowwise() %>% 
     mutate(gene_a_receptor = ifelse(grepl("^complex:", partner_a_receptor), 
@@ -1338,16 +1440,17 @@ neurons_ligands <- neurons_ligands %>%
 
 neurons_ligands <- neurons_ligands %>% 
     rowwise() %>% 
-    mutate(gene_a_receptor = ifelse(grepl("^ENSG", gene_a_receptor), 
-                                    idconv(gene_a_receptor, from_type = "GENEID", to_type = "SYMBOL", db = "human"), 
+    mutate(gene_a_receptor = ifelse(grepl("^simple:", partner_a_receptor), 
+                                    gene_a_receptor, 
                                     str_split(gene_a_receptor, ",") %>% 
                                         sapply(function(x){idconv(x, from_type = "UNIPROTID", to_type = "SYMBOL", db = "human")} %>% 
                                                    str_c(collapse = ","))))
 
 neurons_ligands %>% dplyr::filter(is.na(gene_a_receptor))
-neurons_ligands %>% dplyr::filter(grepl("^ENSG", gene_a_receptor))
+neurons_ligands %>% dplyr::filter(grepl("^complex:", partner_a_receptor))
 # manually convert  to symbol id, this failed convert from uniprot id to symbol id
 neurons_ligands$gene_a_receptor <- ifelse(is.na(neurons_ligands$gene_a_receptor), "RYK,FZD8", neurons_ligands$gene_a_receptor)
+saveRDS(neurons_ligands, "../data/kidney/kidney-map/results/cell_cell_communication/neurons_ligands.rds")
 ```
 
 ```{r}
@@ -1612,7 +1715,7 @@ neurons_receptors <- neurons_receptors %>%
                                                    str_c(collapse = ",")), 
                                     gene_a_receptor))
 neurons_receptors %>% dplyr::filter(is.na(gene_a_receptor))
-# manually change NA to "RYK,FZD8", this conversion failed from uniprotid to symbol id
+# manually change NA to "RYK,FZD8", this conversion failed from uniprot id to symbol id
 neurons_receptors$gene_a_receptor <- ifelse(is.na(neurons_receptors$gene_a_receptor), "RYK,FZD8", neurons_receptors$gene_a_receptor)
 
 
@@ -1635,10 +1738,9 @@ neurons_receptors <- neurons_receptors %>%
                                     gene_b_ligand))
 
 neurons_receptors %>% dplyr::filter(is.na(gene_b_ligand))
-neurons_receptors %>% dplyr::filter(grepl("^ENSG", gene_b_ligand))
 # manually change NA to CEL, this conversion failed for CEL uniprot id to symbol id
 neurons_receptors$gene_b_ligand <- ifelse(is.na(neurons_receptors$gene_b_ligand), "CEL", neurons_receptors$gene_b_ligand)
-saveRDS(neurons_receptors, "../data/kidney/kidney-map/results/cell_cell_communication/")
+saveRDS(neurons_receptors, "../data/kidney/kidney-map/results/cell_cell_communication/neurons_receptors.rds")
 ```
 
 ```{r}
