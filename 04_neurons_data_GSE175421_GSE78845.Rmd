@@ -36,8 +36,8 @@ drg_cell_barcode_ids <- drg_cell_barcode_ids %>%
 rownames(drg_cell_barcode_ids) <- drg_cell_barcode_ids$cell_ids
 drg_cell_barcode_ids$cell_type <- drg_cell_barcode_ids$main_cluster
 drg_cell_barcode_ids$cell_type %>% table
-drg_cell_barcode_ids$cell_type <- ifelse(drg_cell_barcode_ids$cell_type == "Vascular Endothelial Cells", "Spinal Endothelial", drg_cell_barcode_ids$cell_type)
-drg_cell_barcode_ids$location <- "Spine"
+drg_cell_barcode_ids$cell_type <- ifelse(drg_cell_barcode_ids$cell_type == "Vascular Endothelial Cells", "paravertebral Endothelial", drg_cell_barcode_ids$cell_type)
+drg_cell_barcode_ids$location <- "paravertebral"
 
 drg_cell_barcode_list <- split(drg_cell_barcode_ids, f = drg_cell_barcode_ids$library_id)
 
@@ -175,7 +175,7 @@ colData(drg_sce)$clusters <- clusters
 
 colData(drg_sce)$cell_type <- sapply(colData(drg_sce)$clusters, 
                                         FUN = function(x){
-                                            switch(x, 
+                                            switch(as.character(x), 
                                                    "1" = "Sensory Neurons", 
                                                    "2" = "Satellite Glia B", 
                                                    "3" = "Sensory Neurons", 
@@ -191,7 +191,7 @@ colData(drg_sce)$cell_type %>% table
 source("functions/idconv.R")
 plotTSNE(drg_sce, 
          # colour_by = "cell_type",
-         colour_by = idconv("Th"),
+         colour_by = idconv("Tubb3"),
          point_size = 0.5, 
          text_by = "clusters")
 saveRDS(drg_sce, "../data/kidney/kidney-map/GSE175421/drg_sce.rds")

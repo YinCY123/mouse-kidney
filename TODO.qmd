@@ -7,11 +7,19 @@ editor: visual
 
 cell_type_orders
 
--   Integration comparison
--   cell type markers
--   Neurons interaction with other cell types
--   interaction directions: ligand, receptor
--   the the interaction type: gene set enrichment analysis
+-   Integration comparison  
+-   cell type markers, newly find markers  
+-   Neurons interaction with other cell types  
+-   interaction directions: neurons expressed ligands and receptors  
+-   the the interaction type: gene set enrichment analysis (too little genes)  
+-   Slc's expression along the renal tubule and collecting ducts  
+-   catecholamine or noradrenaline receptors expression along renal tubule and collecting ducts  
+-   Aqp's expression along the renal tubule and collecting ducts  
+-   differential expressed genes between different endothelial  
+-   endothelial from different location comparision  
+-   neurons interaction with endothelial  
+-   neurons interaction with immune cells (APCs and T cells)
+
 
 # currently not used circos plot
 

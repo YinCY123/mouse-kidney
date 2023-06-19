@@ -9,9 +9,9 @@ idconv <- function(from_id, from_type = "SYMBOL", to_type = "GENEID", db = "mous
     
     if(db == "mouse"){
         ensdb <- EnsDb.Mmusculus.v79
+        # ensdb = ah[["AH109655"]]
     }else if(db == "human"){
         ensdb <- EnsDb.Hsapiens.v86
-        # ensdb = ah[["AH109606"]]
     }
     
     
