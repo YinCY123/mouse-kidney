@@ -36,7 +36,7 @@ loom2SCE <- function(loom, ...){
     }else{
         col_attrs_df <- as.data.frame(col_attrs_df)
     }
-    rownames(col_attrs_df) <- paste(col_attrs_df$CellID, loom[["col_attrs/ClassProbability_Vascular"]][], sep = "_")
+    rownames(col_attrs_df) <- paste(col_attrs_df$CellID, loom[["col_attrs/emptydrops_FDR"]][], sep = "_")
     print("done...")
     
     row_attrs_df <- list()
@@ -53,7 +53,7 @@ loom2SCE <- function(loom, ...){
     
     
     counts <- t(loom[["matrix"]][,])
-    colnames(counts) <- paste(loom[["col_attrs/CellID"]][], loom[["col_attrs/ClassProbability_Vascular"]][], sep = "_")
+    colnames(counts) <- paste(loom[["col_attrs/CellID"]][], loom[["col_attrs/emptydrops_FDR"]][], sep = "_")
     rownames(counts) <- loom[["row_attrs/Accession"]][]
     
     sce <- SingleCellExperiment(assays = list(counts = as(counts, "CsparseMatrix")), 

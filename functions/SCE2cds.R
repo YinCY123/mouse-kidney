@@ -8,7 +8,7 @@ SCE2cds <- function(SCE, ...){
     
     # normalizaed data
     sn <- assayNames(SCE)
-    for(name in sn[[-1]]){
+    for(name in sn[-1]){
         assay(cds, name) <- assay(SCE, name)
     }
     
