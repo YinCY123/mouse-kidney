@@ -1,0 +1,24 @@
+
+本文件夹用于存储4种不同的算法整合后的数据，由于GitHub允许上传单个文件的大小不超
+过100.0Mb，因此4中算法整合后的结果都使用shell命令split分割成了多个小文件，以便
+上传到GitHub上。
+
+fastMNN_integrated_开头的是fastMNN算法整合后结果。
+fastMNN_integrated_human_开头的是使用CellphoneDB分析细胞间相互作用时将小鼠的基因
+转换成了对应的人的同源基因。
+harmony_integrated_开头的是harmony算法整合的结果。
+seurat——integrated_开头的是seurat整合的结果。
+RISC_integrated_开头的是RISC算法整合的结果。
+
+分割文件是用的是如下格式的命令：
+
+split -b file_size -d -a 2 file_to_be_split prefix
+
+将split分割的小文件恢复到原始文件（.rds格式）需要使用shell命令cat，使用方法如下：
+
+如将fastMNN算法整合后的文件恢复到原始文件使用如下命令
+
+cat fastMNN_integrated_* > fastMNN_integrated.rds
+
+然后就可以使用base::readRDS将恢复的文件读入到R语言环境里面。
+
