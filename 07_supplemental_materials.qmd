@@ -1,0 +1,473 @@
+---
+title: "07_supplemental_materials"
+author: "yincy"
+format: html
+editor: source
+---
+
+# supplemental materials
+
+```{r}
+library(scater)
+library(patchwork)
+library(ggplot2)
+library(magrittr)
+source("functions/idconv.R")
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+```
+
+## gene deteceted, library size, mito_percentage
+
+```{r}
+cd <- sces %>% colData %>% as.data.frame() 
+    
+cd %>% ggplot(aes(level3_cluster, mito_percent)) +
+    geom_jitter(size = 0.2) +
+    scale_y_continuous(name = "mitochandrial percentage", 
+                       breaks = c(0, 25, 50, 75), 
+                       labels = paste(c(0, 25, 50, 75), "%", sep = "")) +
+    scale_x_discrete(name = NULL) +
+    theme(axis.text.x = element_text(angle = -50, hjust = 0), 
+          plot.margin = unit(c(0, 15, 0, 2), "mm"), 
+          axis.title.y = element_text(size = 15))
+ggsave("../data/kidney/kidney-map/results/Supplemental/mito_percent.tiff", 
+       width = 10)
+
+df <- perCellQCMetrics(sces) %>% as.data.frame() %>% tibble::rownames_to_column("cell_ids") %>% 
+    dplyr::left_join(cd)
+df$cell_type <- factor(df$cell_type, levels = levels(sces$level3_cluster))
+df$sum <- log10(df$sum)
+
+df %>% 
+    ggplot(aes(level3_cluster, sum)) +
+    geom_jitter(size = 0.2) +
+    scale_y_continuous(name = "log10 ( sequencing depth )") +
+    scale_x_discrete(name = NULL) +
+    theme(axis.text.x = element_text(angle = -50, hjust = 0), 
+          plot.margin = unit(c(0, 15, 0, 2), "mm"), 
+          axis.title.y = element_text(size = 15)) 
+ggsave("../data/kidney/kidney-map/results/Supplemental/sequencing-depth.tiff", 
+       width = 10)
+
+df %>% 
+    ggplot(aes(level3_cluster, detected)) +
+    geom_jitter(size = 0.2) +
+    scale_x_discrete(name = NULL) +
+    scale_y_continuous(name = "# genes detected") +
+    theme(axis.text.x = element_text(angle = -50, hjust = 0), 
+          plot.margin = unit(c(0, 15, 0, 2), "mm"),
+          axis.title.y = element_text(size = 15))
+ggsave("../data/kidney/kidney-map/results/Supplemental/Number_of_genes_detected.tiff", 
+       width = 10)
+```
+
+
+## high metabolic cells marker gene
+
+```{r}
+# PTS Slc34a1
+# LOH_MTAL, LOH_CTAL: Slc12a1
+# DCT CNT: Pvalb, Slc12a3
+# CCD_IC, CCD_PC: Atp6v1g3, Aqp2
+text_szie = 1.7
+
+plotTSNE(sces,
+         # colour_by = "cell_type",
+         colour_by = idconv("Slc34a1", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = text_szie,
+         point_size = 0.2) +
+    scale_color_continuous(name = "Slc34a1", type = "viridis") +
+    theme(legend.position = "right") +
+
+plotTSNE(sces,
+         colour_by = "mito_percent",
+         # colour_by = idconv("Aqp2", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = text_szie,
+         point_size = 0.2) +
+    scale_color_continuous(name = "mito\npercentage", type = "viridis",
+                           breaks = c(25, 50, 75), labels = paste(c(25, 50, 75), "%", sep = "")) +
+    theme(legend.position = "right") +
+    plot_layout(ncol = 2)
+ggsave("../data/kidney/kidney-map/results/Supplemental/PTS.tiff", 
+       width = 14, height = 7)
+
+
+
+plotTSNE(sces,
+         # colour_by = "cell_type",
+         colour_by = idconv("Slc12a1", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = text_szie,
+         point_size = 0.2) +
+    scale_color_continuous(name = "Slc12a1", type = "viridis") +
+    theme(legend.position = "right") +
+
+plotTSNE(sces,
+         colour_by = "mito_percent",
+         # colour_by = idconv("Aqp2", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = text_szie,
+         point_size = 0.2) +
+    scale_color_continuous(name = "mito\npercentage", type = "viridis",
+                           breaks = c(25, 50, 75), labels = paste(c(25, 50, 75), "%", sep = "")) +
+    theme(legend.position = "right") +
+    plot_layout(ncol = 2)
+
+ggsave("../data/kidney/kidney-map/results/Supplemental/LOH_MTAL_CTAL.tiff", 
+       width = 14, height = 7)
+
+
+
+plotTSNE(sces,
+         # colour_by = "cell_type",
+         colour_by = idconv("Pvalb", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = text_szie,
+         point_size = 0.2) +
+    scale_color_continuous(name = "Pvalb", type = "viridis") +
+    theme(legend.position = "right") +
+
+plotTSNE(sces,
+         # colour_by = "cell_type",
+         colour_by = idconv("Slc12a3", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = text_szie,
+         point_size = 0.2) +
+    scale_color_continuous(name = "Slc12a3", type = "viridis") +
+    theme(legend.position = "right") +
+
+plotTSNE(sces,
+         colour_by = "mito_percent",
+         # colour_by = idconv("Aqp2", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = text_szie,
+         point_size = 0.2) +
+    scale_color_continuous(name = "mito\npercentage", type = "viridis",
+                           breaks = c(25, 50, 75), labels = paste(c(25, 50, 75), "%", sep = "")) +
+    theme(legend.position = "right") +
+    plot_layout(ncol = 2)
+
+ggsave("../data/kidney/kidney-map/results/Supplemental/DCT_CNT.tiff", 
+       width = 14, height = 14)
+
+
+
+plotTSNE(sces,
+         # colour_by = "cell_type",
+         colour_by = idconv("Atp6v1g3", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = text_szie,
+         point_size = 0.2) +
+    scale_color_continuous(name = "Atp6v1g3", type = "viridis") +
+    theme(legend.position = "right") +
+
+    plotTSNE(sces,
+         # colour_by = "cell_type",
+         colour_by = idconv("Aqp2", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = text_szie,
+         point_size = 0.2) +
+    scale_color_continuous(name = "Aqp2", type = "viridis") +
+    theme(legend.position = "right") +
+
+plotTSNE(sces,
+         colour_by = "mito_percent",
+         # colour_by = idconv("Aqp2", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = text_szie,
+         point_size = 0.2) +
+    scale_color_continuous(name = "mito\npercentage", type = "viridis",
+                           breaks = c(25, 50, 75), labels = paste(c(25, 50, 75), "%", sep = "")) +
+    theme(legend.position = "right") +
+    plot_layout(ncol = 2)
+
+ggsave("../data/kidney/kidney-map/results/Supplemental/CCD_PC_IC.tiff", 
+       width = 14, height = 14)
+```
+
+## number of cells per cell types
+
+```{r}
+level1_cell_location <- table(sces$level1_cluster, sces$location) %>%
+    as.data.frame() %>% 
+    magrittr::set_colnames(c("cell_type", "region", "num_of_cells"))
+level2_cell_location <- table(sces$level2_cluster, sces$location) %>% 
+    as.data.frame() %>% 
+    magrittr::set_colnames(c("cell_type", "region", "num_of_cells"))
+level3_cell_location <- table(sces$level3_cluster, sces$location) %>% 
+    as.data.frame() %>% 
+    magrittr::set_colnames(c("cell_type", "region", "num_of_cells"))
+
+
+p1 <- level1_cell_location %>% 
+    ggplot(aes(cell_type, region)) +
+    geom_point(aes(size = num_of_cells)) +
+    scale_size(name = "# Cells", range = c(0, 6)) +
+    scale_x_discrete(name = NULL) +
+    scale_y_discrete(name = "region") +
+    theme(legend.position = "right", 
+          axis.text.x = element_text(angle = -60, hjust = 0))
+
+p2 <- level2_cell_location %>% 
+    ggplot(aes(cell_type, region)) +
+    geom_point(aes(size = num_of_cells)) +
+    scale_size(name = "# Cells", range = c(0, 6)) +
+    scale_x_discrete(name = NULL) +
+    scale_y_discrete(name = "region") +
+    theme(legend.position = "right", 
+          axis.text.x = element_text(angle = -60, hjust = 0), 
+          plot.margin = unit(c(0, 10, 0, 0), "mm"))
+
+
+p3 <- level3_cell_num %>% 
+    ggplot(aes(cell_type, region)) +
+    geom_point(aes(size = num_of_cells)) +
+    scale_size(name = "# Cells", range = c(0, 6)) +
+    scale_x_discrete(name = NULL) +
+    scale_y_discrete(name = "region") +
+    theme(legend.position = "right", 
+          axis.text.x = element_text(angle = -60, hjust = 0), 
+          plot.margin = unit(c(0, 10, 0, 0), "mm"))
+
+p1 + p2 + p3 + plot_layout(ncol = 1)
+ggsave("../data/kidney/kidney-map/results/Supplemental/num_cells_per_celltype.tiff", 
+       height = 10, width = 10)
+```
+
+```{r}
+num_of_cell_datasets <- sces$geo_accession %>% table %>% 
+    as.data.frame() %>% 
+    magrittr::set_colnames(c("datasets", "num_of_cells"))
+
+num_of_cell_datasets %>% 
+    dplyr::mutate(num_of_cells = log10(num_of_cells)) %>% 
+    ggplot(aes(datasets, num_of_cells)) +
+    geom_bar(aes(fill = datasets), stat = "identity") +
+    scale_x_discrete(name = "datasets") +
+    scale_y_continuous(name = "log10( # Cells )") +
+    theme(legend.position = "none",
+          axis.title.y = element_text(size = 20))
+
+ggsave("../data/kidney/kidney-map/results/Supplemental/num_of_cell_datasets.tiff", 
+       width = 10, height = 7)
+```
+
+# antigen presenting gene's expression
+```{r}
+library(SingleCellExperiment)
+library(scuttle)
+library(scater)
+library(scran)
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+genes <-  c("H2-K1", "H2-D1", "H2-Q1", "H2-Q2", "H2-M3", "Relb", "Calcr", "Calcrl", "Ramp1", "Ramp2", "Ramp3")
+
+sces$level3_cluster %>% levels()
+expr_df <- makePerCellDF(sces[, sces$level3_cluster == "Dendritic Cells"], 
+                         features = idconv(genes), 
+                         use.dimred = F) %>% 
+    tidyr::pivot_longer(cols = starts_with("ENS"), names_to = "ensembl", values_to = "logcouts")
+expr_df$symbol <- idconv(expr_df$ensembl, "GENEID", "SYMBOL")
+expr_df$symbol <- factor(expr_df$symbol, 
+                         levels = c("H2-K1", "H2-D1", "H2-Q1", "H2-Q2", 
+                                    "H2-M3", "Relb", "Calcr", "Calcrl", 
+                                    "Ramp1", "Ramp2", "Ramp3"))
+
+expr_df %>% 
+    ggplot(aes(symbol, logcouts)) +
+    geom_violin(aes(fill = symbol), scale = "width") +
+    geom_jitter() +
+    theme(legend.position = "none") +
+    scale_y_continuous(name = "expression level") +
+    scale_x_discrete(name = NULL) +
+    theme(axis.title.y = element_text(size = 15)) 
+ggsave("../data/kidney/kidney-map/results/Supplemental/antigene_presentation.tiff", 
+       width = 10, height = 6)
+```
+
+
+# endothelial from outer and inner medulla expression Aqp1 but not dLOH and PT markers
+```{r}
+# LOH, Bst1
+# PT, Slc34a1
+library(patchwork)
+sce <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+text_szie <- 1.7
+
+plotTSNE(sces,
+         colour_by = idconv(c("Adra1a", "Adra1b", "Adra1d", "Adra2a", "Adra2b", "Adra2c"), from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = text_szie,
+         point_size = 0.2) +
+    scale_color_continuous(name = "Bst1", type = "viridis") +
+    theme(legend.position = "right") 
+
+plotTSNE(sces,
+         colour_by = idconv("Slc34a1", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = text_szie,
+         point_size = 0.2) +
+    scale_color_continuous(name = "Slc34a1", type = "viridis") +
+    theme(legend.position = "right") +
+    plot_layout(ncol = 2)
+ggsave("../data/kidney/kidney-map/results/Supplemental/endo_Aqp1_Bst1_Slc34a1.tiff", 
+       width = 14, height = 7)
+```
+
+
+# top 50 marker genes
+```{r}
+library(pheatmap)
+library(purrr)
+library(dplyr)
+library(tidyr)
+library(scuttle)
+source("functions/idconv.R")
+
+# level 1 cell types
+
+fmarker1 <- readRDS("../data/kidney/kidney-map/results/markers/level1_markers.rds")
+top50_markers_list_1 <- fmarker1 %>% lapply(function(x){
+  x %>% head(50) %>% rownames
+})
+top50_markers_list_1 <- unlist(top50_markers_list_1, use.names = F) %>% unique
+top50_markers_list_1 %>% str
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+sces_agg <- aggregateAcrossCells(sces, 
+                                 ids = sces$level1_cluster, 
+                                 statistics = "mean", 
+                                 use.assay.type = "logcounts", 
+                                 subset.row = top50_markers_list_1)
+
+sces_agg_logcounts <- sces_agg %>% 
+    logcounts() %>% 
+    as.data.frame() %>% 
+    tibble::rownames_to_column("ensembl") %>% 
+    dplyr::mutate(symbol = idconv(ensembl, from_type = "GENEID", to_type = "SYMBOL", db = "mouse")) %>% 
+    dplyr::relocate(symbol, .after = ensembl)
+
+sces_agg_logcounts <- sces_agg_logcounts %>% 
+    dplyr::filter(!is.na(symbol)) %>% 
+    dplyr::select(-1) %>% 
+    tibble::column_to_rownames("symbol") %>% 
+    as.matrix
+
+breaks <- seq(range(sces_agg_logcounts)[1], range(sces_agg_logcounts)[2], by = 0.001)
+tiff("../data/kidney/kidney-map/results/Supplemental/level1_top50_heatmap.tiff", height = 3000, width = 8000)
+pheatmap(t(sces_agg_logcounts), 
+         fontsize = 70,
+         cluster_cols = T,
+         cluster_rows = F,
+         color = colorRampPalette(c("white", "black"))(length(breaks)), 
+         show_rownames = T,
+         show_colnames = T,
+         fontsize_col = 12, 
+         fontsize_row = 60, 
+         breaks = breaks,  
+         legend_breaks = c(0, 8), 
+         legend_labels = c("low", "high"), 
+         treeheight_col = 150)
+dev.off()
+```
+
+
+```{r}
+# level 2 cell types
+
+fmarker2 <- readRDS("../data/kidney/kidney-map/results/markers/level2_markers.rds")
+top50_markers_list_2 <- fmarker2 %>% lapply(function(x){
+  x %>% head(50) %>% rownames
+})
+top50_markers_list_2 <- unlist(top50_markers_list_2, use.names = F) %>% unique
+top50_markers_list_2 %>% str
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+sces_agg <- aggregateAcrossCells(sces, 
+                                 ids = sces$level2_cluster, 
+                                 statistics = "mean", 
+                                 use.assay.type = "logcounts", 
+                                 subset.row = top50_markers_list_2)
+
+sces_agg_logcounts <- sces_agg %>% 
+    logcounts() %>% 
+    as.data.frame() %>% 
+    tibble::rownames_to_column("ensembl") %>% 
+    dplyr::mutate(symbol = idconv(ensembl, from_type = "GENEID", to_type = "SYMBOL", db = "mouse")) %>% 
+    dplyr::relocate(symbol, .after = ensembl)
+
+sces_agg_logcounts <- sces_agg_logcounts %>% 
+    dplyr::filter(!is.na(symbol)) %>% 
+    dplyr::select(-1) %>% 
+    tibble::column_to_rownames("symbol") %>% 
+    as.matrix
+
+breaks <- seq(range(sces_agg_logcounts)[1], range(sces_agg_logcounts)[2], by = 0.001)
+tiff("../data/kidney/kidney-map/results/Supplemental/level2_top50_heatmap.tiff", height = 3000, width = 8000)
+pheatmap(t(sces_agg_logcounts), 
+         fontsize = 70,
+         cluster_cols = T,
+         cluster_rows = F,
+         color = colorRampPalette(c("white", "black"))(length(breaks)), 
+         show_rownames = T,
+         show_colnames = T,
+         fontsize_col = 8, 
+         fontsize_row = 60, 
+         breaks = breaks,  
+         legend_breaks = c(0, 8), 
+         legend_labels = c("low", "high"), 
+         treeheight_col = 150)
+dev.off()
+```
+
+
+```{r}
+# level 3 cell types
+
+fmarker3 <- readRDS("../data/kidney/kidney-map/results/markers/level3_markers.rds")
+top50_markers_list_3 <- fmarker3 %>% lapply(function(x){
+  x %>% head(50) %>% rownames
+})
+top50_markers_list_3 <- unlist(top50_markers_list_3, use.names = F) %>% unique
+top50_markers_list_3 %>% str
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+sces_agg <- aggregateAcrossCells(sces, 
+                                 ids = sces$level3_cluster, 
+                                 statistics = "mean", 
+                                 use.assay.type = "logcounts", 
+                                 subset.row = top50_markers_list_3)
+
+sces_agg_logcounts <- sces_agg %>% 
+    logcounts() %>% 
+    as.data.frame() %>% 
+    tibble::rownames_to_column("ensembl") %>% 
+    dplyr::mutate(symbol = idconv(ensembl, from_type = "GENEID", to_type = "SYMBOL", db = "mouse")) %>% 
+    dplyr::relocate(symbol, .after = ensembl)
+
+sces_agg_logcounts <- sces_agg_logcounts %>% 
+    dplyr::filter(!is.na(symbol)) %>% 
+    dplyr::select(-1) %>% 
+    tibble::column_to_rownames("symbol") %>% 
+    as.matrix
+
+breaks <- seq(range(sces_agg_logcounts)[1], range(sces_agg_logcounts)[2], by = 0.001)
+tiff("../data/kidney/kidney-map/results/Supplemental/level3_top50_heatmap.tiff", height = 3000 * 1.5, width = 10000 * 1.5)
+pheatmap(t(sces_agg_logcounts), 
+         fontsize = 120,
+         cluster_cols = T,
+         cluster_rows = F,
+         color = colorRampPalette(c("white", "black"))(length(breaks)), 
+         show_rownames = T,
+         show_colnames = T,
+         fontsize_col = 6, 
+         fontsize_row = 60, 
+         breaks = breaks,  
+         legend_breaks = c(0, 8), 
+         legend_labels = c("low", "high"), 
+         treeheight_col = 300)
+dev.off()
+```
+
