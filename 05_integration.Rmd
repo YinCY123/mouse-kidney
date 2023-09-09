@@ -49,7 +49,7 @@ counts <- harmonizeSCE(sce_list = list(drg_sce, sym_sce, glomer_sce, dev_cell_sc
 library(AnnotationHub)
 ah <- AnnotationHub()
 query(ah, c("Mus musculus", "EnsDb"))
-ensdb <- ah[["AH104895"]]
+ensdb <- ah[["AH109655"]]
 gene_df <- data.frame(ensembl = rownames(counts), 
                       symbol = mapIds(ensdb, keys = rownames(counts), keytype = "GENEID", column = "SYMBOL"))
 gene_df %>% head
@@ -76,6 +76,7 @@ library(PCAtools)
 elbow <- findElbowPoint(attr(npcs, "percentVar"))
 reducedDim(sces, "PCA") <- npcs[, 1:50]
 
+
 set.seed(103)
 sces <- RunHarmony(object = sces, 
                    group.by.vars = "geo_accession", 
@@ -84,6 +85,7 @@ sces <- RunHarmony(object = sces,
 
 set.seed(104)
 sces <- runTSNE(sces, dimred = "harmony")
+
 
 
 library(viridis)
@@ -100,6 +102,53 @@ saveRDS(sces, "../data/kidney/kidney-map/integrated_data/harmony_integrated.rds"
 ```
 
 
+```{r}
+library(harmony)
+library(patchwork)
+library(ggplot2)
+library(scater)
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/harmony_integrated.rds")
+sces$location <- factor(sces$location, levels = c("Cortex", "outer medulla", "inner medulla", "paravertebral"))
+
+p_harmony_integrated_01 <- plotReducedDim(sces, 
+               dimred = "TSNE", 
+               color_by = "cell_type", 
+               text_by = "cell_type", 
+               text_size = 2, 
+               point_size = 0.2) +
+    theme(legend.position = "none") 
+saveRDS(p_harmony_integrated_01, 
+        "../data/kidney/kidney-map/integrated_data/p_harmony_integrated_01.rds")
+
+p_harmony_integrated_02 <- plotReducedDim(sces, 
+               dimred = "TSNE", 
+               color_by = "geo_accession", 
+               text_by = "cell_type", 
+               text_size = 2, 
+               point_size = 0.2) +
+    theme(legend.position = "right") +
+    scale_color_discrete(name = "dataset") +
+    guides(color = guide_legend(override.aes = list(size = 2))) 
+saveRDS(p_harmony_integrated_02, 
+        "../data/kidney/kidney-map/integrated_data/p_harmony_integrated_02.rds")
+
+p_harmony_integrated_03 <- plotReducedDim(sces, 
+               dimred = "TSNE", 
+               color_by = "location", 
+               text_by = "cell_type", 
+               text_size = 2, 
+               point_size = 0.2) +
+    theme(legend.position = "right") +
+    scale_color_discrete(name = "region") +
+    guides(color = guide_legend(override.aes = list(size = 2))) +
+    plot_layout(ncol = 1)
+
+saveRDS(p_harmony_integrated_03, 
+        "../data/kidney/kidney-map/integrated_data/p_harmony_integrated_03.rds")
+```
+
+
 
 # Integration with RISC
 ```{r}
@@ -112,6 +161,10 @@ drg_sce <- readRDS("../data/kidney/kidney-map/GSE175421/drg_sce.rds")
 glomer_sce <- readRDS("../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
 dev_cell_sce <- readRDS("../data/kidney/kidney-map/GSE129798/dev_cell_sce.rds")
 
+sym_sce$geo_accession <- "GSE78845"
+drg_sce$geo_accession <- "GSE175421"
+glomer_sce$geo_accession <- "GSE146912"
+dev_cell_sce$geo_accession <- "GSE129798"
 
 sces <- list(dev_cell = dev_cell_sce, drg = drg_sce, glomer = glomer_sce, sym = sym_sce)
 source("functions/harmoniseSCE.R")
@@ -151,9 +204,9 @@ var_genes %>% str
 sces <- scMultiIntegrate(objects = sces, 
                          eigens = 30, 
                          var.gene = var_genes, 
-                         align = "OLS", 
+                         align = "Predict", 
                          npc = 50, 
-                         ncore = 6, 
+                         ncore = 4, 
                          seed = 102)
 gc()
 
@@ -161,6 +214,64 @@ set.seed(103)
 sces <- scTSNE(sces, npc = 50, use = "PLS", perplexity = 30)
 
 saveRDS(sces, "../data/kidney/kidney-map/integrated_data/RISC_integrated.rds")
+```
+
+```{r}
+library(RISC)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(SingleCellExperiment)
+library(patchwork)
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/RISC_integrated.rds")
+df1 <- sces@coldata %>% as.data.frame()
+df2 <- sces@DimReduction$cell.tsne %>% as.data.frame() %>% tibble::rownames_to_column("Barcode")
+df <- left_join(df2, df1)
+df %>% dim
+df$Set %>% table
+df$Set <- sapply(df$Set, function(x){switch(as.character(x), 
+                                            "Set1" = "GSE129798", 
+                                            "Set2" = "GSE175421", 
+                                            "Set3" = "GSE146912", 
+                                            "Set4" = "GSE78845")})
+
+cell_coord <- df %>% group_by(cell_type) %>% summarise(x = median(tSNE1), y = median(tSNE2))
+df$location <- factor(df$location, levels = c("Cortex", "outer medulla", "inner medulla", "paravertebral"))
+
+
+p_RISC_integrated_01 <- df %>% 
+    ggplot(aes(tSNE1, tSNE2)) +
+    geom_point(aes(color = cell_type), size = 0.2) +
+    geom_text(data = cell_coord, aes(x, y, label = cell_type), size = 2) +
+    theme_classic() +
+    theme(legend.position = "none")
+saveRDS(p_RISC_integrated_01, 
+        "../data/kidney/kidney-map/integrated_data/p_RISC_integrated_01.rds")
+
+p_RISC_integrated_02 <- df %>% 
+    ggplot(aes(tSNE1, tSNE2)) +
+    geom_point(aes(color = Set), size = 0.2) +
+    geom_text(data = cell_coord, aes(x, y, label = cell_type), size = 2) +
+    theme(legend.position = "right") +
+    scale_color_discrete(name = "dataset") +
+    theme_classic() +
+    guides(color = guide_legend(override.aes = list(size = 2))) 
+saveRDS(p_RISC_integrated_02, 
+        "../data/kidney/kidney-map/integrated_data/p_RISC_integrated_02.rds")
+    
+p_RISC_integrated_03 <- df %>% 
+    ggplot(aes(tSNE1, tSNE2)) +
+    geom_point(aes(color = location), size = 0.2) +
+    geom_text(data = cell_coord, aes(x, y, label = cell_type), size = 2) +
+    scale_color_discrete(name = "region") +
+    theme(legend.position = "right") +
+    theme_classic() +
+    guides(color = guide_legend(override.aes = list(size = 2))) +
+    plot_layout(ncol = 1)
+
+saveRDS(p_RISC_integrated_03, 
+        "../data/kidney/kidney-map/integrated_data/p_RISC_integrated_03.rds")
 ```
 
 
@@ -214,18 +325,11 @@ combined_sces <- correctExperiments(sces[[1]], sces[[2]], sces[[3]], sces[[4]],
                                     PARAM = FastMnnParam())
 
 set.seed(104)
-# combined_sces <- runPCA(combined_sces, subset_row = hvgs) 
 combined_sces <- runTSNE(combined_sces, 
                          dimred = "corrected", 
                          perplexity = 30)
-
-plotTSNE(combined_sces, 
-         colour_by = "cell_type",
-         # colour_by = idconv("Cd209a"),
-         text_by = "cell_type", 
-         text_size = 2,
-         point_size = 0.2) +
-    theme(legend.position = "none")
+# set.seed(110)
+# combined_sces <- runUMAP(combined_sces, dimred = "corrected")
 ```
 
 
@@ -239,29 +343,35 @@ clusters <- clusterRows(x = reducedDim(combined_sces, "TSNE"),
 clusters %>% table
 combined_sces$clusters <- factor(clusters)
 
-library(patchwork)
-source("functions/idconv.R")
+saveRDS(combined_sces, "../data/kidney/kidney-map/integrated_data/fastMNN_integrated_after_clustering.rds")
+
+
 plotTSNE(combined_sces, 
-         colour_by = "geo_accession", 
+         colour_by = "clusters", 
          text_by = "clusters", 
          text_size = 2,
          point_size = 0.2) +
-    theme(legend.position = "none")  +
+    theme(legend.position = "right") +
+    guides(color = guide_legend(override.aes = list(size = 2)))
+ggsave("../data/kidney/kidney-map/integrated_data/clusters.tiff", width = 10)
 
 plotTSNE(combined_sces, 
-         # colour_by = "cell_type",
-         colour_by = idconv("Aqp1"),
-         text_by = "cell_type", 
+         colour_by = "clusters", 
+         text_by = "clusters", 
          text_size = 2,
          point_size = 0.2) +
-    theme(legend.position = "none")
+    theme(legend.position = "none", 
+          axis.line = element_blank(), 
+          axis.title = element_blank(), 
+          axis.text = element_blank(), 
+          axis.ticks = element_blank()) 
 
-ggsave("cell_annotation.pdf", width = 10)
+ggsave("../data/kidney/kidney-map/integrated_data/clusters_for_subcluster.tiff", width = 7)
 ```
 
 
 ```{r}
-for( n in unique(colData(combined_sces)$clusters)){
+for(n in unique(colData(combined_sces)$clusters)){
     my_color <- rep("grey", length(colData(combined_sces)$clusters))
     names(my_color) <- as.character(colData(combined_sces)$clusters)
     my_color[colData(combined_sces)$clusters == n] <- "red"
@@ -278,6 +388,23 @@ for( n in unique(colData(combined_sces)$clusters)){
     ggsave(paste0("sces/the-", n, "-cluster.pdf"))
 }
 
+
+for(n in c("LOH_MTAL", "LOH_CTAL")){
+    my_color <- rep("grey", length(colData(sces)$cell_type))
+    names(my_color) <- as.character(colData(sces)$cell_type)
+    my_color[colData(sces)$cell_type == n] <- "red"
+    
+    plotReducedDim(object = sces, 
+                   dimred = "TSNE", 
+                   colour_by = "cell_type", 
+                   text_by = "cell_type", 
+                   point_size = 0.2, 
+                   text_size = 2.5) +
+        scale_color_manual(values = my_color) +
+        guides(colour = guide_legend(override.aes = list(size = 2)))
+    
+    ggsave(paste0("sces/the-", n, "-cluster.pdf"))
+}
 table(combined_sces$cell_type, combined_sces$clusters) %>% as.matrix()  %>% t
 ```
 
@@ -307,7 +434,8 @@ cs <- rownames(tubule_pred)
 ```
 
 ```{r}
-pdf("tubule_pre.pdf")
+tiff("../data/kidney/kidney-map/results/Supplemental/tubule_pre.tiff", 
+     width = 2000, height = 2000)
 tubule_pred$scores %>% as.data.frame(row.names = cs) %>% as.matrix() %>% 
     pheatmap::pheatmap(angle_col = 315, 
                        cluster_cols = T, 
@@ -319,6 +447,20 @@ tubule_pred$scores %>% as.data.frame(row.names = cs) %>% as.matrix() %>%
                        fontsize_number = 4, 
                        number_format = "%.3f")
 dev.off()
+
+
+similarity_score <- tubule_pred$scores %>% as.data.frame(row.names = cs)
+
+library(ggheatmap)
+ggheatmap(data = similarity_score, 
+          legendName = "Similarity \nScore", 
+          cluster_rows = T, 
+          cluster_cols = T, 
+          hclust_method = "ward.D2", 
+          color = colorRampPalette(colors = rev(RColorBrewer::brewer.pal(7, "RdYlBu")))(100), 
+          tree_height_rows = 0.3) 
+ggsave("../data/kidney/kidney-map/results/Supplemental/tubule_pre.tiff", 
+       height = 12, width = 8)
 ```
 
 
@@ -327,6 +469,7 @@ dev.off()
 # 39, 48:  NK, Cd4 T, Cd8 T 
 
 c39_48 <- combined_sces[, combined_sces$clusters %in% c(39, 48)]
+source("functions/idconv.R")
 hvgs <- c("ENSMUSG00000032094", "ENSMUSG00000002033", 
           "ENSMUSG00000030579", "ENSMUSG00000023274", 
           "ENSMUSG00000053977", "ENSMUSG00000053044")
@@ -358,22 +501,45 @@ colLabels(c39_48) <- sapply(c39_48_clusters, FUN = function(x){
 # 1 NK: 3
 # 2 Cd4 T Cells: 1, 2, 4, 6
 # 3 Cd8 T Cells: 5
+c39_48$cell_type <- c("1" = "NK Cells", "2" = "Cd4 T Cells", "3" = "Cd8 T Cells")[c39_48$label]
 
 colLabels(c39_48) <- paste("39_48.",colLabels(c39_48), sep = "") 
-
 labels <- as.character(combined_sces$clusters)
 labels[labels %in% c(39, 48)] <- colLabels(c39_48)
 combined_sces$clusters <- labels
 
+saveRDS(c39_48, "../data/kidney/kidney-map/integrated_data/sub-clusters/c39_48.rds")
+
 source("functions/idconv.R")
 library(patchwork)
 plotTSNE(c39_48, 
-         colour_by = "label",
-         text_by = "label") +
+         colour_by = "cell_type",
+         text_by = "cell_type", 
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_manual(name = "cell type", values = c("green", "blue", "black")) +
+plotTSNE(c39_48, 
+         colour_by = idconv("Cd4"),
+         text_by = "cell_type",
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_gradient(name = "Cd4", low = "grey80", high = "red") +
 plotTSNE(c39_48, 
          # colour_by = "label",
-         colour_by = idconv("Cd4"),
-         text_by = "label")
+         colour_by = idconv("Cd8a"),
+         text_by = "cell_type",
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_gradient(name = "Cd8a", low = "grey80", high = "red") +
+plotTSNE(c39_48, 
+         # colour_by = "label",
+         colour_by = idconv("Gzma"),
+         text_by = "cell_type",
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_gradient(name = "Gzma", low = "grey80", high = "red")
+
+ggsave("../data/kidney/kidney-map/integrated_data/sub-clusters/T_NK_cell_clusters.tiff")
 ```
 
 
@@ -414,23 +580,49 @@ colLabels(c21_41) <- c21_41_clusters
 
 
 # 1:IMCD_IC, 2: CCD_IC, 3: OMCD_IC
-# Hmx2, Slc26a4, Insrr, Slc4a1,  Aqp6, Kit
 colLabels(c21_41) <- paste("21_41.",colLabels(c21_41), sep = "")
+c21_41$cell_type <- c("21_41.1" = "IMCD_IC", "21_41.2" = "CCD_IC", "21_41.3" = "OMCD_IC")[c21_41$label]
+c21_41$cell_type %>% table
+saveRDS(c21_41, "../data/kidney/kidney-map/integrated_data/sub-clusters/CD_IC.rds")
 
 labels <- as.character(combined_sces$clusters)
 labels[labels %in% c(21, 41)] <- colLabels(c21_41)
 combined_sces$clusters <- labels
 
-
+library(patchwork)
 plotTSNE(c21_41, 
-         colour_by = "location",
-         # colour_by = "label",
-         text_by = "label") +
-
-plotTSNE(c21_41, 
-         colour_by = idconv("Hmx2"),
+         colour_by = "cell_type",
          # colour_by = "",
-         text_by = "label")
+         text_by = "cell_type", 
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_manual(name = "cell type", values = c("green", "blue", "black")) +
+
+plotTSNE(c21_41, 
+         colour_by = idconv("Slc26a4"),
+         # colour_by = "",
+         text_by = "cell_type", 
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_gradient(name = "Slc26a4", low = "grey80", high = "red") +
+
+plotTSNE(c21_41, 
+         colour_by = idconv("Aqp6"),
+         # colour_by = "label",
+         text_by = "cell_type", 
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_gradient(name = "Aqp6", low = "grey80", high = "red") +
+
+plotTSNE(c21_41, 
+         colour_by = idconv("Aqp6"),
+         # colour_by = "label",
+         text_by = "cell_type", 
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_gradient(name = "Kit", low = "grey80", high = "red") 
+
+ggsave("../data/kidney/kidney-map/integrated_data/sub-clusters/CD_IC_clusters.tiff")
 ```
 
 
@@ -455,7 +647,7 @@ cs <- runPCA(cs,
               ncomponents = 8)
 
 set.seed(102)
-cs <- runTSNE(cs, dimred = "PCA", preplexity = 20)
+cs <- runTSNE(cs, dimred = "PCA", preplexity = 40)
 
 set.seed(103)
 cs_clusters <- clusterRows(reducedDim(cs, "PCA"), 
@@ -463,9 +655,9 @@ cs_clusters <- clusterRows(reducedDim(cs, "PCA"),
 cs_clusters %>% table
 colLabels(cs) <- cs_clusters
 
-# Slc14a2, Sptssb
-# 1 DTL2: 1, 2
-# 2 DTL3: 3, 4 
+# 1 DTL3: 1, 2
+# 2 DTL2: 3, 4 
+cs$cell_type <- c("1" = "LOH_DTL3", "2" = "LOH_DTL3", "3" = "LOH_DTL2", "4" = "LOH_DTL2")[cs$label]
 
 colLabels(cs) <- sapply(cs_clusters, FUN = function(x){
   switch(as.character(x), 
@@ -476,20 +668,38 @@ colLabels(cs) <- sapply(cs_clusters, FUN = function(x){
 })
 
 colLabels(cs) <- paste("7.", colLabels(cs), sep = "") 
+saveRDS(cs, "../data/kidney/kidney-map/integrated_data/sub-clusters/LOH_DTL23.rds")
 
 labels <- as.character(combined_sces$clusters)
 labels[labels == 7] <- colLabels(cs)
 combined_sces$clusters <- labels
 
 plotTSNE(cs, 
-         colour_by = "location",
+         colour_by = "cell_type",
          # colour_by = "",
-         text_by = "label") +
+         text_by = "cell_type", 
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_manual(name = "cell type", values = c("green", "blue")) +
 
 plotTSNE(cs, 
-         colour_by = idconv("Sptssb"),
+         colour_by = idconv("Fcgbp"),
          # colour_by = "",
-         text_by = "label")
+         text_by = "cell_type", 
+         text_size = 4, 
+         point_size = 1) + 
+    scale_color_gradient(name = "Fcgbp", low = "grey80", high = "red") +
+
+plotTSNE(cs, 
+         colour_by = idconv("Slc39a8"),
+         # colour_by = "",
+         text_by = "cell_type", 
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_gradient(name = "Slc39a8", low = "grey80", high = "red") +
+    plot_layout(nrow = 2)
+
+ggsave("../data/kidney/kidney-map/integrated_data/sub-clusters/LOH_DTL2-3.tiff")
 ```
 
 
@@ -523,35 +733,51 @@ cs_clusters <- clusterRows(reducedDim(cs, "PCA"),
 cs_clusters %>% table
 colLabels(cs) <- cs_clusters
 
-# 1 MATL: 1, 4
-# 2 CTAL: 2, 3
-# Pth1r
-
+# 1 MTAL: 2,4
+# 2 CTAL: 1,3
+cs$cell_type <- c("1" = "LOH_CTAL", "2" = "LOH_MTAL", "3" = "LOH_CTAL", "4" = "LOH_MTAL")[cs$label]
 colLabels(cs) <- sapply(cs_clusters, FUN = function(x){
   switch(as.character(x), 
-         "1" = "1",
-         "2" = "2", 
+         "1" = "2",
+         "2" = "1", 
          "3" = "2", 
          "4" = "1")
 })
 
 colLabels(cs) <- paste("24_61.",colLabels(cs), sep = "") 
+saveRDS(cs, "../data/kidney/kidney-map/integrated_data/sub-clusters/LOH_CTAL_MTAL.rds")
 
 labels <- as.character(combined_sces$clusters)
 labels[labels %in% c(24, 56, 61)] <- colLabels(cs)
 combined_sces$clusters <- labels
 
-
 library(patchwork)
 plotTSNE(cs, 
-         colour_by = "label",
+         colour_by = "cell_type",
          # colour_by = "",
-         text_by = "label") +
+         text_by = "cell_type", 
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_manual(name = "cell type", values = c("green", "blue")) +
+
+plotTSNE(cs, 
+         colour_by = idconv("Nccrp1"),
+         # colour_by = "",
+         text_by = "cell_type",
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_gradient(name = "Nccrp1", low = "grey80", high = "red") +
 
 plotTSNE(cs, 
          colour_by = idconv("Pth1r"),
          # colour_by = "",
-         text_by = "label")
+         text_by = "cell_type", 
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_gradient(name = "Pth1r", low = "grey80", high = "red") +
+    plot_layout(nrow = 2)
+
+ggsave("../data/kidney/kidney-map/integrated_data/sub-clusters/LOH_MTAL_CTAL.tiff")
 ```
 
 
@@ -590,12 +816,15 @@ cs_clusters <- clusterRows(reducedDim(cs, "PCA"),
                             BLUSPARAM = NNGraphParam(k = 20, cluster.fun = "louvain"))
 cs_clusters %>% table
 colLabels(cs) <- cs_clusters
+saveRDS(cs, "../data/kidney/kidney-map/integrated_data/sub-clusters/CD_PC.rds")
 
+# 1 CCD_PC: 1, 2 : Calb1, Tep1
+# 2 OMCD_PC: 3, 4, 5 : Btc, Itm2a, Slc4a5, 
+# 3 IMCD_PC: 6, 7: Aldh1a3
 
-# 1 CCD_PC: 1, 2
-# 2 OMCD_PC: 3, 4, 5
-# 3 IMCD_PC: 6, 7
-# Slc14a2, Wnt4
+cs$cell_type <- c("1" = "CCD_PC", "2" = "CCD_PC", "3" = "OMCD_PC", 
+                  "4" = "OMCD_PC", "5" = "OMCD_PC", "6" = "IMCD_PC", 
+                  "7" = "IMCD_PC")[cs$label]
 
 colLabels(cs) <- sapply(cs_clusters, FUN = function(x){
   switch(as.character(x), 
@@ -617,14 +846,34 @@ combined_sces$clusters <- labels
 
 library(patchwork)
 plotTSNE(cs, 
-         colour_by = "location", 
-         text_by = "label", 
+         colour_by = "cell_type", 
+         text_by = "cell_type", 
+         text_size = 4, 
          point_size = 1) +
+    scale_color_manual(name = "cell type", values = c("green", "blue", "black")) +
 
 plotTSNE(cs, 
-         colour_by = idconv("Wnt4"), 
-         text_by = "label", 
-         point_size = 0.5)
+         colour_by = idconv("Calb1"), 
+         text_by = "cell_type", 
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_gradient(name = "Calb1", low = "grey80", high = "red") +
+
+plotTSNE(cs, 
+         colour_by = idconv("Btc"), 
+         text_by = "cell_type", 
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_gradient(name = "Btc", low = "grey80", high = "red") +
+
+plotTSNE(cs, 
+         colour_by = idconv("Aldh1a3"), 
+         text_by = "cell_type", 
+         text_size = 4, 
+         point_size = 1) +
+    scale_color_gradient(name = "Aldh1a3", low = "grey80", high = "red") 
+
+ggsave("../data/kidney/kidney-map/integrated_data/sub-clusters/CD_PC_clusters.tiff")
 ```
 
 
@@ -636,8 +885,8 @@ cell_type_annotation <- c(
     "4" = "Glomerular Endothelial",
     "5" = "Sensory Neurons",
     "6" = "CNT",
-    "7.1" = "LOH_DTL2",
-    "7.2" = "LOH_DTL3",
+    "7.1" = "LOH_DTL3",
+    "7.2" = "LOH_DTL2",
     "8" = "Macrophages",
     "9" = "Mesangial Cells A",
     "10" = "Dendritic Cells",
@@ -720,29 +969,87 @@ colData(combined_sces) <- transform(colData(combined_sces),
 combined_sces$cell_type %>% table(useNA = "ifany")
 combined_sces <- combined_sces[, combined_sces$cell_type != "doublets"]
 
-plotTSNE(combined_sces, 
+plotTSNE(sces, 
          colour_by = "cell_type", 
          text_by = "cell_type", 
          point_size = 0.2, 
          text_size = 2) +
-    theme(legend.position = "none")
+    scale_x_continuous(name = NULL) +
+    scale_y_continuous(name = NULL) +
+    theme(legend.position = "none", 
+          axis.line = element_blank(), 
+          axis.ticks = element_blank(), 
+          axis.text = element_blank()) 
+ggsave("../data/kidney/kidney-map/integrated_data/fastMNN_cell_type_TSNE.tiff")
 
 saveRDS(combined_sces, "../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
 ```
 
+
+```{r}
+library(SingleCellExperiment)
+library(scater)
+library(scran)
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+sces$location <- factor(sces$location, levels = c("Cortex", "outer medulla", "inner medulla", "paravertebral"))
+
+p_fastMNN_integrated_01 <- plotReducedDim(sces, 
+               dimred = "TSNE", 
+               color_by = "cell_type", 
+               text_by = "cell_type", 
+               text_size = 2, 
+               point_size = 0.2) +
+    theme(legend.position = "none") 
+saveRDS(p_fastMNN_integrated_01, 
+        "../data/kidney/kidney-map/integrated_data/p_fastMNN_integrated_01.rds")
+
+p_fastMNN_integrated_02 <- plotReducedDim(sces, 
+               dimred = "TSNE", 
+               color_by = "geo_accession", 
+               text_by = "cell_type", 
+               text_size = 2, 
+               point_size = 0.2) +
+    scale_color_discrete(name = "dataset") +
+    theme(legend.position = "right") +
+    guides(color = guide_legend(override.aes = list(size = 2)))
+saveRDS(p_fastMNN_integrated_02, 
+        "../data/kidney/kidney-map/integrated_data/p_fastMNN_integrated_02.rds")
+
+
+p_fastMNN_integrated_03 <- plotReducedDim(sces, 
+               dimred = "TSNE", 
+               color_by = "location", 
+               text_by = "cell_type", 
+               text_size = 2, 
+               point_size = 0.2) +
+    scale_color_discrete(name = "region") +
+    theme(legend.position = "right") +
+    guides(color = guide_legend(override.aes = list(size = 2))) +
+    plot_layout(ncol = 1)
+
+saveRDS(p_fastMNN_integrated_03, 
+        "../data/kidney/kidney-map/integrated_data/p_fastMNN_integrated_03.rds")
+```
 
 
 # Integration with Seurat
 ```{r}
 library(Seurat)
 library(magrittr)
-library(ggplot2)
 
 sym_sce <- readRDS("../data/kidney/kidney-map/GSE78845/sym_sce.rds")
 drg_sce <- readRDS("../data/kidney/kidney-map/GSE175421/drg_sce.rds")
 glomer_sce <- readRDS("../data/kidney/kidney-map/GSE146912/glomer_sce.rds")
 dev_cell_sce <- readRDS("../data/kidney/kidney-map/GSE129798/dev_cell_sce.rds")
 
+sym_sce$geo_accession <- "GSE78845"
+drg_sce$geo_accession <- "GSE175421"
+glomer_sce$geo_accession <- "GSE146912"
+dev_cell_sce$geo_accession <- "GSE129798"
 
 kidney_list <- list(dev_cell = dev_cell_sce, 
                     glomer = glomer_sce, 
@@ -784,6 +1091,89 @@ saveRDS(kidney_integrated, "../data/kidney/kidney-map/integrated_data/Seurat_int
 ```
 
 
+```{r}
+library(Seurat)
+library(scater)
+library(scran)
+library(patchwork)
+library(magrittr)
+library(ggplot2)
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/Seurat_integrated.rds")
+sces <- as.SingleCellExperiment(sces)
+sces$location <- factor(sces$location, levels = c("Cortex", "outer medulla", "inner medulla", "paravertebral"))
+sces %>% colData
+
+p_seurat_integrated_01 <- plotReducedDim(sces, 
+               dimred = "TSNE",
+               colour_by = "cell_type", 
+               text_by = "cell_type", 
+               text_size = 2, 
+               point_size = 0.2) +
+    theme(legend.position = "none") 
+saveRDS(p_seurat_integrated_01, 
+        "../data/kidney/kidney-map/integrated_data/p_seurat_integrated_01.rds")
+
+
+p_seurat_integrated_02 <- plotReducedDim(sces, 
+               dimred = "TSNE",
+               colour_by = "geo_accession", 
+               text_by = "cell_type", 
+               text_size = 2, 
+               point_size = 0.2) +
+    scale_color_discrete(name = "dataset") +
+    theme(legend.position = "right") +
+    guides(color = guide_legend(override.aes = list(size = 2))) 
+saveRDS(p_seurat_integrated_02, 
+        "../data/kidney/kidney-map/integrated_data/p_seurat_integrated_02.rds")
+
+
+p_seurat_integrated_03 <- plotReducedDim(sces, 
+               dimred = "TSNE",
+               colour_by = "location", 
+               text_by = "cell_type", 
+               text_size = 2, 
+               point_size = 0.2) +
+    scale_color_discrete(name = "region") +
+    theme(legend.position = "right") +
+    guides(color = guide_legend(override.aes = list(size = 2))) +
+    plot_layout(ncol = 1)
+saveRDS(p_seurat_integrated_03, 
+        "../data/kidney/kidney-map/integrated_data/p_seurat_integrated_03.rds")
+```
+
+
+# integration maps
+```{r}
+library(patchwork)
+library(ggplot2)
+
+p_harmony_integrated_01 <- readRDS("../data/kidney/kidney-map/integrated_data/p_harmony_integrated_01.rds")
+p_harmony_integrated_02 <- readRDS("../data/kidney/kidney-map/integrated_data/p_harmony_integrated_02.rds")
+p_harmony_integrated_03 <- readRDS("../data/kidney/kidney-map/integrated_data/p_harmony_integrated_03.rds")
+
+p_fastMNN_integrated_01 <- readRDS("../data/kidney/kidney-map/integrated_data/p_fastMNN_integrated_01.rds")
+p_fastMNN_integrated_02 <- readRDS("../data/kidney/kidney-map/integrated_data/p_fastMNN_integrated_02.rds")
+p_fastMNN_integrated_03 <- readRDS("../data/kidney/kidney-map/integrated_data/p_fastMNN_integrated_03.rds")
+
+p_RISC_integrated_01 <- readRDS("../data/kidney/kidney-map/integrated_data/p_RISC_integrated_01.rds")
+p_RISC_integrated_02 <- readRDS("../data/kidney/kidney-map/integrated_data/p_RISC_integrated_02.rds")
+p_RISC_integrated_03 <- readRDS("../data/kidney/kidney-map/integrated_data/p_RISC_integrated_03.rds")
+
+p_seurat_integrated_01 <- readRDS("../data/kidney/kidney-map/integrated_data/p_seurat_integrated_01.rds")
+p_seurat_integrated_02 <- readRDS("../data/kidney/kidney-map/integrated_data/p_seurat_integrated_02.rds")
+p_seurat_integrated_03 <- readRDS("../data/kidney/kidney-map/integrated_data/p_seurat_integrated_03.rds")
+
+p_harmony_integrated_01 + p_harmony_integrated_02 + p_harmony_integrated_03 +
+    p_seurat_integrated_01 + p_seurat_integrated_02 + p_seurat_integrated_03 +
+    p_RISC_integrated_01 + p_RISC_integrated_02 + p_RISC_integrated_03 +
+    p_fastMNN_integrated_01 + p_fastMNN_integrated_02 + p_fastMNN_integrated_03 +
+    plot_layout(nrow = 3, ncol = 4, byrow = F)
+
+
+ggsave("../data/kidney/kidney-map/integrated_data/integration_maps.tiff", 
+       width = 40*0.5, height = 30*0.5)
+```
 
 
 

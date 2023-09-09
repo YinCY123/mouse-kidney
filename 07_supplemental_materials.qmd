@@ -12,6 +12,8 @@ library(scater)
 library(patchwork)
 library(ggplot2)
 library(magrittr)
+library(tidyr)
+library(dplyr)
 source("functions/idconv.R")
 sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
 ```
@@ -470,4 +472,62 @@ pheatmap(t(sces_agg_logcounts),
          treeheight_col = 300)
 dev.off()
 ```
+
+
+# GABA and GABA receptor
+```{r}
+gene1 <- c("Gad1", "Gad2", "Slc6a1", "Slc6a6", "Slc6a8", "Slc6a11", "Slc6a12", "Slc6a13")
+gene2 <- c("Gabbr1", "Gabbr2")
+
+cells_to_retain <- c("Endothelial", "Glomerular Endothelial", "Sensory Neurons", "Sympathetic Neurons")
+
+cells <- sces[, sces$level3_cluster %in% cells_to_retain]
+
+df <- makePerCellDF(cells, features = idconv(c(gene1, gene2)), use.dimred = F) %>% 
+    pivot_longer(cols = starts_with("ENSMUSG"), names_to = "ensembl", values_to = "logcounts")
+df$symbol <- idconv(df$ensembl, from_type = "GENEID", to_type = "SYMBOL")
+
+df$location <- as.character(df$location)
+df$level3_cluster <- as.character(df$level3_cluster)
+df <- df %>% 
+    rowwise() %>% 
+    mutate(level3_cluster = ifelse(level3_cluster == "Endothelial", location, level3_cluster), 
+           level3_cluster = ifelse(level3_cluster == "Cortex", "cortex endo", 
+                                   ifelse(level3_cluster == "outer medulla", "outer medulla endo", 
+                                          ifelse(level3_cluster == "inner medulla", "inner medulla endo", level3_cluster)))) 
+df$level3_cluster <- factor(df$level3_cluster, levels =c("Glomerular Endothelial", "cortex endo", 
+                                                         "outer medulla endo", "inner medulla endo", 
+                                                         "Sensory Neurons", "Sympathetic Neurons"))
+```
+
+
+```{r}
+p1 <- df %>% 
+    dplyr::filter(level3_cluster %in% c("cortex endo", "outer medulla endo", "inner medulla endo", "Glomerular Endothelial"), symbol %in% gene1) %>% 
+    ggplot(aes(symbol, logcounts)) +
+    # geom_violin(scale = "area") +
+    geom_jitter(width = 0.1, size = 1.5) +
+    scale_x_discrete(name = NULL) +
+    scale_y_continuous(name = "logcounts") +
+    facet_wrap(~level3_cluster, nrow = 2) +
+    theme(axis.text.x = element_text(size = 12, face = "bold", angle = -60, hjust = 0), 
+          axis.title.y = element_text(size = 15), 
+          strip.text.x.top = element_text(size = 15, face = "bold"))
+
+
+p2 <- df %>% 
+    dplyr::filter(level3_cluster %in% c("Sensory Neurons", "Sympathetic Neurons"), symbol %in% gene2) %>% 
+    ggplot(aes(symbol, logcounts)) +
+    geom_jitter(width = 0.1) +
+    facet_wrap(~level3_cluster, nrow = 2) +
+    scale_x_discrete(name = NULL) +
+    scale_y_continuous(name = "logcounts") +
+    theme(axis.text.x = element_text(size = 12, face = "bold"), 
+          strip.text.x.top = element_text(size = 15, face = "bold"), 
+          axis.title.y = element_text(size = 15))
+
+p1 + p2 + plot_layout(widths = c(3, 1))
+ggsave("../data/kidney/kidney-map/results/Supplemental/GABA.tiff", width = 15)
+```
+
 

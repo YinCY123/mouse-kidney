@@ -181,7 +181,7 @@ clusters %>% table
 colData(dev_cell_sce)$clusters <- factor(clusters)
 colData(dev_cell_sce)
 
-source("R/idconv.R")
+source("functions/idconv.R")
 plotTSNE(dev_cell_sce, 
          # colour_by = idconv("Corin"),
          colour_by = "location",
@@ -289,7 +289,7 @@ labels <- as.character(dev_cell_sce$clusters)
 labels[labels == "8"] <- colLabels(c8)
 dev_cell_sce$clusters <- labels
 
-source("R/idconv.R")
+source("functions/idconv.R")
 plotReducedDim(c8, dimred = "TSNE", 
                colour_by = idconv("Cnn1"), 
                text_by = "label")
@@ -731,7 +731,6 @@ plotTSNE(subs_dev_cell_tubule, colour_by = "location")
 ```
 
 
-**TO THIS PLACE**
 ```{r}
 # assign the location information back to the dev_cell_sce object
 others <- dev_cell_sce[, !(colData(dev_cell_sce)$cell_type %in% cell_to_annotate)] 

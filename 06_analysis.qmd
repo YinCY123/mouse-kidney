@@ -3,7 +3,7 @@ title: "06_analysis"
 author: "yincy"
 date: 2023/05/06
 format: html
-editor: visual
+editor: source
 ---
 
 # different resolution levels of cell types
@@ -198,11 +198,16 @@ p_cluster_relationships <- ly %>%
     coord_flip() +
     scale_y_reverse(expand = c(0.3, 0.3)) +
     scale_x_reverse() +
-    scale_color_discrete(name = "cluster levels") +
+    scale_color_discrete(name = "cell type levels") +
     theme(legend.position = "top", 
-          panel.background = element_blank())
+          panel.background = element_blank(), 
+          legend.title = element_text(size = 15))
 
-saveRDS(p_cluster_relationships, "../data/kidney/kidney-map/results/p_cluster_relationships.rds")
+
+ggsave("../data/kidney/kidney-map/results/markers/p_cluster_relationships.tiff", 
+       width = 6.5, height = 10)
+saveRDS(p_cluster_relationships, 
+        "../data/kidney/kidney-map/results/markers/p_cluster_relationships.rds")
 ```
 
 # marker gene detection
@@ -238,16 +243,18 @@ fmarker3 <- findMarkers(sces,
                         pval.type = "all", 
                         min.prop = 0.1, 
                         direction = "up", 
-                        subset.row = hvgs, 
-                        lfc = 0)
+                        # subset.row = hvgs, 
+                        lfc = 0, 
+                        restrict = levels)
 saveRDS(fmarker3, "../data/kidney/kidney-map/results/markers/level3_markers.rds")
+saveRDS(fmarker3, "../data/kidney/kidney-map/results/markers/level3_markers_restricted.rds")
 ```
 
 ```{r}
 source("functions/idconv.R")
 fmarker3 <- readRDS("../data/kidney/kidney-map/results/markers/level3_markers.rds")
 fmarker3 %>% names
-fmarker3[[4]] %>% rownames() %>% head(50) %>% idconv(from_type = "GENEID", to_type = "SYMBOL", db = "mouse")
+fmarker3[[2]] %>% rownames() %>% head(50) %>% idconv(from_type = "GENEID", to_type = "SYMBOL", db = "mouse")
 
 idconv("ENSMUSG00000059336", from_type = "GENEID", to_type = "SYMBOL", db = "mouse")
 ```
@@ -283,29 +290,37 @@ for(name in names(fmarker3)){
                    ncol = 2) +
         theme(axis.text.x = element_text(angle = -60, hjust = 0, vjust = 0.5))
     
-    ggsave(paste("level3_clusters/", name, "_cluster.pdf", sep = ""), height = 100, width = 10, limitsize = F)
+    ggsave(paste("level3_clusters_restricted/", name, "_cluster.pdf", sep = ""), height = 100, width = 10, limitsize = F)
 }
-
 ```
 
 ## plot marker genes
 
 ```{r}
 library(patchwork)
-plotTSNE(sces, 
+library(scater)
+library(viridis)
+source("functions/idconv.R")
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+plotTSNE(sces,
          # colour_by = "cell_type",
-         colour_by = idconv("Muc20"),
+         colour_by = idconv("Plpp1", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
          text_by = "cell_type", 
          text_size = 2,
          point_size = 0.2) +
-    theme(legend.position = "none") +
-    
-plotTSNE(sces, 
+    theme(legend.position = "right") +
+    scale_color_gradient(name = "Plpp1", low = "grey80", high = "red") 
+
+
+plotTSNE(sces,
          colour_by = "location",
-         # colour_by = idconv("Aqp1"),
+         # colour_by = idconv("Aqp1", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
          text_by = "cell_type", 
          text_size = 2,
-         point_size = 0.2)
+         point_size = 0.2) +
+    theme(legend.position = "right") +
+    # scale_color_gradient(name = "Aqp1", low = "grey80", high = "red") +
+    plot_layout(ncol = 2)
 ```
 
 ### level 1 markers
@@ -314,20 +329,25 @@ plotTSNE(sces,
 library(scater)
 library(tidyr)
 library(dplyr)
+library(ggplot2)
 source("functions/idconv.R")
 
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
 marker_themes <- theme(panel.grid.minor = element_blank(), 
                        panel.background = element_blank(),
-                       panel.grid.major.x = element_line(linetype = 2, linewidth = 0.2, colour = "grey70"),
+                       panel.grid.major = element_line(linetype = 2, linewidth = 0.01, colour = "grey90"),
                        axis.ticks = element_line(linewidth = 0.2),
-                       axis.text.x = element_text(angle = -40, hjust = 0, vjust = 0.5)) 
+                       axis.text.x = element_text(angle = -40, hjust = 0, vjust = 0.5, 
+                                                  size = 18, face = "bold"), 
+                       strip.text.y.right = element_text(size = 15, face = "bold"), 
+                       plot.margin = unit(c(0, 15, 0, 0), "mm")) 
 
 level1_markers <- list(
     "Endothelium" = c("Pecam1", "Ly6c1", "Kdr", "Cdh5", "Flt1", "Emcn", "Sox18",
                       "Egfl7", "Gimap6", "Fabp4", "Esam", "Rsad2", "Adgrl4", 
                       'Cd300lg', "Ctla2a", "Icam2", "Fam167b", "Mmrn2", "Tek", 
                       "Ramp3", "Tie1"),
-    "Parietal Epithelial" = c("Stc2","C3", "Cp"),
+    "Parietal Epithelial" = c("Stc2","C3"),
     "Proximal Tubule" = c("Slc34a1", "Lrp2", "Slc27a2", "Acsm2", "Miox", 
                           "Ass1", "Akr1c21", "Keg1", "Spink3", 
                           "Fbp1", "Ttc36", "Guca2b", "Fut9", 
@@ -423,8 +443,7 @@ level2_markers <- list(
                     "Cspg4", "Pdgfrb", "Map3k7cl", "Ngf", "Lmod1"),
     "VSMC" = c("Cnn1", "Nkx3-1", "Ptgis", "Pln", "Tcap", "Sh3bgr"),
     "Fibroblast" = c("Krt19", "Krt15", "Cbr2", "Upk1b", "Dcn", "Trim29",  "Krt5", "Egfl6",  "Gsdmc2"),
-    "Mesangial Cells" = c("Sfrp2", "Dkk2", "Septin4",  "Ccn2", "Adamts5", "F2r", "Itga8", 
-                          "Ier5", "Nt5e", "Gdf10", "Scarf2", "Scn1b"),
+    "Mesangial Cells" = c("Nt5e", "Itga8",  "Septin4", "Scarf2", "Sfrp2",  "Ccn2", "Gdf10"),
     "Podocyte" = c("Dpp4", "Clic3", "Mafb", "Pals1", "Gas1", "Tmem150c", 
                     "H2-Q6", "Sema3g", "Hs3st6", "Nphs2", "Cldn5", "Tcf21",
                     "Ptpro", "Clic5", "Nphs1",  "Thsd7a", 
@@ -453,30 +472,37 @@ saveRDS(p_level2, "../data/kidney/kidney-map/results/markers/p_level2_markers.rd
 ### level 3 markers
 
 ```{r}
-sces$level3_cluster %>% levels()
 level3_markers <- list(
     "Endothelial" = c("Pecam1"), 
     "Glomerular Endothelial" = c("Pi16", "Gm49391", "Gm45837", "Gm49393"),
-    "Parietal Epithelial" = c("Stc2", "C3", "Cp"), 
+    "paravertebral Endothelial" = c("Slco1a4", "Abcb1a"),
+    "Parietal Epithelial" = c("Stc2", "C3"), 
     "PTS1" = c("Slc5a2", "Slc5a12", "Spp2", "Gsta2"),
     "PTS2" = c("Slc22a6"),
     "PTS3" = c("Slc13a3"),
     "LOH_DTL1" = c("Slc14a2"), 
-    "LOH_DTL2" = ,
-    "LOH_DTL3" = ,
-    "aLOH" = c("Slc12a1"), 
-    "Distal Tubule" = c("Slc12a3"), 
-    "CD_IC" = c("Atp6v1g3"), 
-    "CD_PC" = c("Aqp2"), 
+    "LOH_DTL2" = c("Fcgbp"),
+    "LOH_DTL3" = c("Slc39a8", "Angpt2", "Fmo2"),
+    "LOH_ATL" = c("Sptssb"), 
+    "LOH_MTAL" = c("Slc12a1", "Nccrp1", "Gpx6"),
+    "LOH_CTAL" = c("Egf", "Slc12a1", "Umod", "Pth1r", "Gpx6"),
+    "DCT" = c("Pvalb"), 
+    "CNT" = c("Calb1", "S100g", "Pgam2"), 
+    "CCD_IC" = c("Slc26a4", "Insrr", "Hmx2"),
+    "OMCD_IC" = c("Kit"), 
+    "IMCD_IC" = c("Aqp6", "Slc4a1", "Kit"),
+    "CCD_PC" = c("Kcne1"), 
+    "OMCD_PC" = c("Btc"), 
+    "IMCD_PC"  =c("Aldh1a3"),
     "Fibroblast" = c("Krt19"), 
     "VSMC" = c("Cnn1"), 
     "Pericytes" = c("Cspg4"), 
-    "Podocyte" = c("Dpp4"), 
-    "Mesangial Cells A" = c("Cebpb"), 
-    "Mesangial Cells B" = c("Rn7sk"), 
+    "Podocyte" = c("Dpp4", "Clic3", "H2-Q6", "Tcf21"), 
+    "Mesangial Cells A" = c("Ctgf"), 
+    "Mesangial Cells B" = c("Hs3st3b1"), 
     "Sensory Neurons" = c("Calca"), 
     "Sympathetic Neurons" = c("Dbh"), 
-    "Satellite Glia A" = c("Fabp7"), 
+    "Satellite Glia A" = c("Mmd2", "Fabp7", "Ttyh1", "Lpar1", "Fbln2", "Sfrp5"), 
     "Satellite Glia B" = c("Scn7a", "Entpd2", 'Col3a1', "C4b"), 
     "Schwann Cells" = c("Ncmap"), 
     "Monocytes" = c("Sirpb1c"), 
@@ -502,9 +528,175 @@ p_level3 <- level3_df %>%
                labeller = lb) +
     scale_x_discrete(name = NULL) +
     scale_y_continuous(name = NULL) +
+    theme(plot.margin = unit(c(0, 5, 0, 0), "mm")) +
     marker_themes
 
 saveRDS(p_level3, "../data/kidney/kidney-map/results/markers/p_level3_markers.rds")
+```
+
+```{r}
+library(patchwork)
+
+p_level1_markers <- readRDS("../data/kidney/kidney-map/results/markers/p_level1_markers.rds")
+p_level2_markers <- readRDS("../data/kidney/kidney-map/results/markers/p_level2_markers.rds")
+p_level3_markers <- readRDS("../data/kidney/kidney-map/results/markers/p_level3_markers.rds")
+
+p_level1_markers + p_level2_markers + plot_layout(widths = c(1, 2.3))
+ggsave("../data/kidney/kidney-map/results/markers/markers12.tiff", 
+       width = 45 * 0.9, height = 30 * 0.9)
+
+# (p_level1_markers + p_level2_markers + plot_layout(widths = c(1, 2.3))) / (p_level3_markers) +
+#     plot_layout(heights = c(1, 2.5))
+p_level3_markers
+ggsave("../data/kidney/kidney-map/results/markers/markers3.tiff", 
+       width = 45 * 0.9, height = 45 * 0.9)
+```
+
+
+### podocytes markers
+
+```{r}
+library(scater)
+library(ggplot2)
+library(patchwork)
+library(tidyr)
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+
+podocytes_df <- makePerCellDF(sces, features = idconv(c("Nphs1", "Nphs2", "Dpp4", "Clic3")), use.dimred = F) %>% 
+    pivot_longer(cols = starts_with("ENSMUSG"), names_to = "ensembl", values_to = "logcounts")
+podocytes_df$ensembl <- factor(podocytes_df$ensembl, levels = idconv(c("Nphs1", "Nphs2", "Dpp4", "Clic3")))
+
+lb <- setNames(names(idconv(c("Nphs1", "Nphs2", "Dpp4", "Clic3"))), idconv(c("Nphs1", "Nphs2", "Dpp4", "Clic3"))) %>% 
+    as_labeller()
+
+podocytes_df %>% 
+    ggplot(aes(level2_cluster, logcounts)) +
+    geom_violin(aes(fill = level2_cluster), scale = "width") +
+    facet_wrap(vars(ensembl), 
+               ncol = 1, 
+               labeller = lb, 
+               strip.position = "right") +
+    scale_x_discrete(name = NULL) +
+    scale_y_discrete(name = "expression level") +
+    theme(legend.position = "none", 
+          axis.text.x = element_text(angle = -60, hjust = 0), 
+          axis.title.y = element_text(size = 20),
+          strip.text.y.right = element_text(size = 13), 
+          strip.background = element_rect(fill = "grey70"))
+ggsave("../data/kidney/kidney-map/results/markers/podocytes_markers.tiff", 
+       width = 10, height = 6)
+```
+
+### mesangial cell markers
+
+```{r}
+mesangial_df <- makePerCellDF(sces, features = idconv(c("Itga8", "Nt5e", "Septin4", "Scarf2")), use.dimred = F) %>% 
+    pivot_longer(cols = starts_with("ENS"), names_to = "ensembl", values_to = "logcounts")
+mesangial_df$ensembl <- factor(mesangial_df$ensembl, levels = idconv(c("Itga8", "Nt5e", "Septin4", "Scarf2")))
+lb <- as_labeller(setNames(names(idconv(c("Itga8", "Nt5e", "Septin4", "Scarf2"))), idconv(c("Itga8", "Nt5e", "Septin4", "Scarf2"))))
+
+mesangial_df %>% 
+    ggplot(aes(level2_cluster, logcounts)) +
+    geom_violin(aes(fill = level2_cluster), scale = "width") +
+    facet_wrap(vars(ensembl), 
+               ncol = 1, 
+               labeller = lb, 
+               strip.position = "right") +
+    scale_x_discrete(name = NULL) +
+    scale_y_continuous(name = "expression level") +
+    theme(legend.position = "none", 
+          axis.text.x = element_text(angle = -60, hjust = 0), 
+          axis.title.y = element_text(size = 20),
+          strip.text.y.right = element_text(size = 13), 
+          strip.background = element_rect(fill = "grey70"))
+ggsave("../data/kidney/kidney-map/results/markers/mesangial_marker.tiff", 
+       width = 10, height = 6)
+```
+
+### parietal epithelial
+
+```{r}
+parietal <- makePerCellDF(sces, features = idconv(c("Pax2", "Pax8", "Prom1", "Stc2", "C3")), use.dimred = F) %>% 
+    pivot_longer(cols = starts_with("ENS"), names_to = "ensembl", values_to = "logcounts")
+parietal$ensembl <- factor(parietal$ensembl, levels = idconv(c("Pax2", "Pax8", "Prom1", "Stc2", "C3")))
+lb <- as_labeller(setNames(names(idconv(c("Pax2", "Pax8", "Prom1", "Stc2", "C3"))), idconv(c("Pax2", "Pax8", "Prom1", "Stc2", "C3"))))
+
+parietal %>% 
+    ggplot(aes(level2_cluster, logcounts)) +
+    geom_violin(aes(fill = level2_cluster), scale = "width") +
+    facet_wrap(vars(ensembl), 
+               labeller = lb, 
+               ncol = 1, 
+               strip.position = "right") +
+    scale_x_discrete(name = NULL) +
+    scale_y_continuous(name = "expression level") +
+    theme(legend.position = "none", 
+          axis.text.x = element_text(angle = -60, hjust = 0),
+          axis.title.y = element_text(size = 20),
+          strip.background = element_rect(fill = "grey70"), 
+          strip.text.y.right = element_text(size = 12))
+
+ggsave("../data/kidney/kidney-map/results/markers/parietal_epithelial_markers.tiff", 
+       width = 10, height = 6)
+```
+
+### glomerular endothelial markers
+
+```{r}
+glomer_endo <- makePerCellDF(sces, features = idconv(c("Pi16", "Gm49391", "Gm45837", "Gm49393")),use.dimred = F) %>% 
+    tidyr::pivot_longer(cols = starts_with("ENSMUSG"), names_to = "ensembl", values_to = "logcounts") 
+glomer_endo$ensembl <- factor(glomer_endo$ensembl, levels = idconv(c("Pi16", "Gm49391", "Gm45837", "Gm49393")))
+lb <- as_labeller(setNames(names(idconv(c("Pi16", "Gm49391", "Gm45837", "Gm49393"))), idconv(c("Pi16", "Gm49391", "Gm45837", "Gm49393"))))
+
+glomer_endo %>% 
+    ggplot(aes(level3_cluster, logcounts)) +
+    geom_violin(aes(fill = level3_cluster), scale = "width") +
+    facet_wrap(vars(ensembl), 
+               ncol = 1, 
+               strip.position = "right", 
+               labeller = lb) +
+    scale_x_discrete(name = NULL) +
+    scale_y_continuous(name = "expression level") +
+    theme(legend.position = "none", 
+          axis.text.x = element_text(angle = -60, hjust = 0, size = 12),
+          axis.title.y = element_text(size = 20),
+          strip.text.y.right = element_text(size = 13), 
+          strip.background = element_rect(fill = "grey70"))
+
+ggsave("../data/kidney/kidney-map/results/markers/glomer_endo_markers.tiff", 
+       width = 15)
+```
+
+# highly metabolic active region
+
+```{r}
+library(scater)
+library(ggplot2)
+library(patchwork)
+
+plotReducedDim(sces, 
+               dimred = "TSNE", 
+               color_by = "location", 
+               text_by = "cell_type", 
+               text_size = 2, 
+               point_size = 0.2) +
+    theme(legend.position = "right") +
+    scale_color_discrete(name = "region", type = "viridis") +
+    guides(color = guide_legend(override.aes = list(size = 2))) +
+
+plotReducedDim(sces, 
+               dimred = "TSNE", 
+               color_by = "mito_percent", 
+               text_by = "cell_type", 
+               text_size = 2, 
+               point_size = 0.2) +
+    theme(legend.position = "right") +
+    viridis::scale_color_viridis(name = "mito \npercentage", option = "D", 
+                                 breaks = c(25, 50, 75), 
+                                 labels = paste(c(25, 50, 75), "%", sep = ""))
+
+ggsave("../data/kidney/kidney-map/integrated_data/fastMNN_mito_percentage.tiff", 
+       width = 14)
 ```
 
 # cell-cell communication
@@ -837,17 +1029,23 @@ dev.off()
 
 #### level 1 interactions of Neurons
 
-the interaction strength is defined by:  
+the interaction strength is defined by:
 
-1. the number of total interactions between the two populations  
-2. the sum of the mean expression between those two populations  
-3. the sum of the mean expressions of the two clusters then normalized by the total number of interactions between the two clusters  
+1.  the number of total interactions between the two populations\
+2.  the sum of the mean expression between those two populations\
+3.  the sum of the mean expressions of the two clusters then normalized by the total number of interactions between the two clusters
 
 ```{r}
 #| message: false
 #| label: level 1 interactions
+library(stringr)
+library(dplyr)
+library(tidyr)
+
 sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated_human.rds")
 level1 <- setNames(sces$level1_cluster, sces$level3_cluster)
+means_long <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/means_long.rds")
+means_long <- means_long %>% dplyr::filter(!(receptor_a == "False" & receptor_b == "False"))
 means_long <- means_long %>%
     mutate(cell_a = level1[cell_a],
            cell_b = level1[cell_b])
@@ -876,6 +1074,7 @@ write.csv(neurons_interactions_level1,
           quote = F)
 
 # manually change Neurons to the second column
+means_long %>% dplyr::filter(receptor_a == "False", receptor_b == "False")
 ```
 
 ```{r}
@@ -929,6 +1128,7 @@ ns <- c(rep("Endothelium", 3), "Parietal Epithelial", rep("Proximal Tubule", 3),
         rep("Glia", 3))
 level1.1 <- setNames(ns, levels(sces$level3_cluster))
 means_long <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/means_long.rds")
+means_long <- means_long %>% dplyr::filter(!(receptor_a == "False" & receptor_b == "False"))
 
 means_long <- means_long %>%
     mutate(cell_a = level1.1[cell_a], 
@@ -965,8 +1165,8 @@ library(circlize)
 library(RColorBrewer)
 neurons_interactions_level1.1 <- read.csv("../data/kidney/kidney-map/results/cell_cell_communication/level1.1_interactions.csv")
 
-pdf("../data/kidney/kidney-map/results/cell_cell_communication/level1.1_interactions.pdf",
-    height = 3, width = 8)
+tiff("../data/kidney/kidney-map/results/cell_cell_communication/level1.1_interactions.tiff",
+    height = 800 * 2, width = 2000 * 2)
 par(mfrow = c(1, 3))
 circos.par(start.degree = -20,
            gap.after = c(rep(10, 7), 30, 10, 30, 10), 
@@ -974,7 +1174,7 @@ circos.par(start.degree = -20,
 order <- c("Endothelium", "Parietal Epithelial", "Proximal Tubule", 
            "LOH", "Distal Tubule", "Collecting Duct", "Interstitial", 
            "Immune", "Sensory Neurons", "Sympathetic Neurons", "Glia")
-grid.col <- colorRampPalette(colors = rainbow(9))(length(levels(sces$level1_cluster)) - 1)
+grid.col <- colorRampPalette(colors = brewer.pal(9, "Set1"))(length(levels(sces$level1_cluster)) - 1)
 grid.col <- append(grid.col, c("grey40", "grey40"), after = 8)
 names(grid.col) <- order
 
@@ -988,11 +1188,11 @@ for(i in 3:5){
                               link.largest.ontop = TRUE)
     circos.track(track.index = 1, bg.border = NA, panel.fun = function(x, y){
         circos.text(x = CELL_META$xcenter, 
-                    y = CELL_META$ylim[2] + mm_y(1), 
+                    y = CELL_META$ylim[2] + mm_y(10), 
                     labels = get.cell.meta.data("sector.index"), 
                     facing = "bending.inside", 
                     niceFacing = TRUE, 
-                    cex = 0.42, 
+                    cex = 2.8, 
                     adj = 0.5)
     })
 }
@@ -1009,6 +1209,8 @@ dev.off()
 level2 <- setNames(sces$level2_cluster, sces$level3_cluster)
 
 means_long <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/means_long.rds")
+means_long <- means_long %>% dplyr::filter(!(receptor_a == "False" & receptor_b == "False"))
+
 means_long <- means_long %>% 
     mutate(cell_a = level2[cell_a], 
            cell_b = level2[cell_b])
@@ -1046,15 +1248,15 @@ library(circlize)
 library(RColorBrewer)
 neurons_interactions_level2 <- read.csv("../data/kidney/kidney-map/results/cell_cell_communication/level2_interactions.csv")
 
-pdf("../data/kidney/kidney-map/results/cell_cell_communication/level2_interactions.pdf", 
-    height = 3, width = 8)
+tiff("../data/kidney/kidney-map/results/cell_cell_communication/level2_interactions.tiff", 
+    height = 800 * 2, width = 2000 * 2)
 par(mfrow = c(1, 3))
 circos.par(start.degree = -13,
            gap.after = c(rep(3, 18), 10, 3, 10, 3, 3),
            canvas.ylim = c(-1.2, 1.2), canvas.xlim = c(-1.2, 1.2))
 order <- sces$level2_cluster %>% levels()
 names(order) <- order
-grid.col <- colorRampPalette(colors = rainbow(9))(length(levels(sces$level2_cluster)) - 2)
+grid.col <- colorRampPalette(colors = brewer.pal(9, "Set1"))(length(levels(sces$level2_cluster)) - 2)
 grid.col <- append(grid.col, c("grey40", "grey40"), after = 19)
 names(grid.col) <- order
 
@@ -1068,21 +1270,21 @@ for(i in 3:5){
                              link.largest.ontop = TRUE)
     circos.track(track.index = 1, bg.border = NA, panel.fun = function(x, y){
         circos.text(x = CELL_META$xcenter * 1.4, 
-                    y = CELL_META$ylim[2] + mm_y(2), 
+                    y = CELL_META$ylim[2] + mm_y(15), 
                     labels = ifelse(get.cell.meta.data("sector.index") %in% c("Sympathetic Neurons", "Sensory Neurons"), 
                                    get.cell.meta.data("sector.index"), ""), 
                     facing = "bending.inside", 
                     niceFacing = TRUE, 
-                    cex = 0.8, 
+                    cex = 6, 
                     adj = 0.8)
         
         circos.text(x = CELL_META$xcenter, 
-                    y = CELL_META$ylim[2] + mm_y(0.2), 
+                    y = CELL_META$ylim[2] + mm_y(2), 
                     labels = ifelse(get.cell.meta.data("sector.index") %in% c("Sympathetic Neurons", "Sensory Neurons"), 
                                     "", get.cell.meta.data("sector.index")), 
                     facing = "clockwise", 
                     niceFacing = TRUE, 
-                    cex = 0.4, 
+                    cex = 3, 
                     adj = 0)
     })
 }
@@ -1096,6 +1298,7 @@ dev.off()
 ```{r}
 #| label: level 3 interactions
 means_long <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/means_long.rds")
+means_long <- means_long %>% dplyr::filter(!(receptor_a == "False" & receptor_b == "False"))
 
 means_long$cell_pair_ids <- means_long %>% 
     unite(col = "cell_pair_ids", cell_a, cell_b, sep = "@") %>% 
@@ -1127,8 +1330,8 @@ write.csv(neurons_interactions_level3,
 library(circlize)
 library(RColorBrewer)
 neurons_interactions_level3 <- read.csv("../data/kidney/kidney-map/results/cell_cell_communication/level3_interactions.csv")
-pdf("../data/kidney/kidney-map/results/cell_cell_communication/level3_interactions.pdf", 
-    height = 3, width = 8)
+tiff("../data/kidney/kidney-map/results/cell_cell_communication/level3_interactions.tiff", 
+    height = 800 * 2, width = 2000 * 2)
 par(mfrow = c(1, 3))
 lim <- 1.5
 circos.par(start.degree = -0.5,
@@ -1137,7 +1340,7 @@ circos.par(start.degree = -0.5,
            cell.padding = rep(0, 4))
 order <- sces$level3_cluster %>% levels()
 names(order) <- order
-grid.col <- colorRampPalette(colors = rainbow(9))(length(levels(sces$level3_cluster)) - 2)
+grid.col <- colorRampPalette(colors = brewer.pal(9, "Set1"))(length(levels(sces$level3_cluster)) - 2)
 grid.col <- append(grid.col, c("grey40", "grey40"), after = 34)
 names(grid.col) <- order
 
@@ -1149,13 +1352,13 @@ for(i in 3:5){
                               annotationTrack = c("grid"), annotationTrackHeight = 0.05, 
                               direction.type = "diffHeight", link.largest.ontop = TRUE)
     circos.track(track.index = 1, bg.border = NA, panel.fun = function(x, y){
-        circos.text(x = CELL_META$xcenter * 1.3, 
-                    y = CELL_META$ylim[2] + mm_y(1.3), 
+        circos.text(x = CELL_META$xcenter * 1.5, 
+                    y = CELL_META$ylim[2] + mm_y(12), 
                     labels = ifelse(get.cell.meta.data("sector.index") %in% c("Sympathetic Neurons", "Sensory Neurons"), 
                                    get.cell.meta.data("sector.index"), ""), 
                     facing = "bending.inside", 
                     niceFacing = TRUE, 
-                    cex = 0.42, 
+                    cex = 4, 
                     adj = 0.9)
         
         circos.text(x = CELL_META$xcenter * 1.5, 
@@ -1164,7 +1367,7 @@ for(i in 3:5){
                                     "", get.cell.meta.data("sector.index")), 
                     facing = "clockwise", 
                     niceFacing = TRUE, 
-                    cex = 0.35, 
+                    cex = 3, 
                     adj = 0)
     })
 }
@@ -1173,7 +1376,7 @@ circos.clear()
 dev.off()
 ```
 
-# directed interaction
+# directional interaction
 
 ```{r}
 library(dplyr)
@@ -1220,7 +1423,6 @@ write.csv(receptors_expressed_by_neurons,
           "../data/kidney/kidney-map/results/cell_cell_communication/receptors_expressed_by_neurons.csv", 
           row.names = F, quote = F)
 ```
-
 
 ```{r}
 library(dplyr)
@@ -1272,8 +1474,8 @@ library(circlize)
 library(RColorBrewer)
 
 receptors_expressed_by_neurons <- read.csv("../data/kidney/kidney-map/results/cell_cell_communication/receptors_expressed_by_neurons.csv")
-pdf("../data/kidney/kidney-map/results/cell_cell_communication/receptors_expressed_by_neurons.pdf", 
-    height = 3, width = 8)
+tiff("../data/kidney/kidney-map/results/cell_cell_communication/receptors_expressed_by_neurons.tiff", 
+    height = 800 * 2, width = 2000 * 2)
 par(mfrow = c(1, 3))
 lim <- 1.5
 circos.par(start.degree = 1.5,
@@ -1295,13 +1497,13 @@ for(i in 3:5){
                              directional = 1, link.arr.type = "big.arrow", direction.type = "arrows", 
                              link.largest.ontop = TRUE)
     circos.track(track.index = 1, bg.border = NA, panel.fun = function(x, y){
-        circos.text(x = CELL_META$xcenter * 1.3, 
-                    y = CELL_META$ylim[2] + mm_y(1.3), 
+        circos.text(x = CELL_META$xcenter * 1.5, 
+                    y = CELL_META$ylim[2] + mm_y(13), 
                     labels = ifelse(get.cell.meta.data("sector.index") %in% c("Sympathetic Neurons", "Sensory Neurons"), 
                                    get.cell.meta.data("sector.index"), ""), 
                     facing = "bending.inside", 
                     niceFacing = TRUE, 
-                    cex = 0.42, 
+                    cex = 4, 
                     adj = 0.9)
         
         circos.text(x = CELL_META$xcenter * 1.5, 
@@ -1310,7 +1512,7 @@ for(i in 3:5){
                                     "", get.cell.meta.data("sector.index")), 
                     facing = "clockwise", 
                     niceFacing = TRUE, 
-                    cex = 0.35, 
+                    cex = 3.5, 
                     adj = 0)
     })
 }
@@ -1324,8 +1526,8 @@ library(circlize)
 library(RColorBrewer)
 
 receptors_expressed_by_non_neurons <- read.csv("../data/kidney/kidney-map/results/cell_cell_communication/ligands_expressed_by_neurons.csv")
-pdf("../data/kidney/kidney-map/results/cell_cell_communication/ligands_expressed_by_neurons.pdf", 
-    height = 3, width = 8)
+tiff("../data/kidney/kidney-map/results/cell_cell_communication/ligands_expressed_by_neurons.tiff", 
+    height = 800 * 2, width = 2000 * 2)
 par(mfrow = c(1, 3))
 lim <- 1.5
 circos.par(start.degree = 1.5,
@@ -1347,13 +1549,13 @@ for(i in 3:5){
                              link.arr.type = "big.arrow", directional = -1, 
                              direction.type = c("arrows"))
     circos.track(track.index = 1, bg.border = NA, panel.fun = function(x, y){
-        circos.text(x = CELL_META$xcenter * 1.3, 
-                    y = CELL_META$ylim[2] + mm_y(1.3), 
+        circos.text(x = CELL_META$xcenter * 1.6, 
+                    y = CELL_META$ylim[2] + mm_y(13), 
                     labels = ifelse(get.cell.meta.data("sector.index") %in% c("Sympathetic Neurons", "Sensory Neurons"), 
                                    get.cell.meta.data("sector.index"), ""), 
                     facing = "bending.inside", 
                     niceFacing = TRUE, 
-                    cex = 0.42, 
+                    cex = 4, 
                     adj = 0.9)
         
         circos.text(x = CELL_META$xcenter * 1.5, 
@@ -1362,7 +1564,7 @@ for(i in 3:5){
                                     "", get.cell.meta.data("sector.index")), 
                     facing = "clockwise", 
                     niceFacing = TRUE, 
-                    cex = 0.35, 
+                    cex = 3.5, 
                     adj = 0)
     })
 }
@@ -1372,7 +1574,6 @@ dev.off()
 ```
 
 # neurons expressed top 10 liagnds, receptors and there's interaction with other cells
-
 ## neurons top ligand's receptors expression across cell types
 
 ```{r}
@@ -1406,6 +1607,7 @@ ligands_expressed_by_neurons <- ligands_expressed_by_neurons %>%
     dplyr::relocate(cell_b_ligand, .before = 2) 
 
 complex_input <- read.csv("../data/cellphonedb/v4.1.0/complex_input.csv") %>% tibble::column_to_rownames("complex_name")
+
 
 # convert ligand uniprot id to symbol id
 neurons_ligands <- ligands_expressed_by_neurons %>% 
@@ -1452,6 +1654,7 @@ neurons_ligands %>% dplyr::filter(grepl("^complex:", partner_a_receptor))
 neurons_ligands$gene_a_receptor <- ifelse(is.na(neurons_ligands$gene_a_receptor), "RYK,FZD8", neurons_ligands$gene_a_receptor)
 saveRDS(neurons_ligands, "../data/kidney/kidney-map/results/cell_cell_communication/neurons_ligands.rds")
 ```
+
 
 ```{r}
 library(scuttle)
@@ -1560,7 +1763,7 @@ neurons_top_ligands_list <- neurons_top_ligands_list %>% lapply(function(x){
                  partner_b_ligand = factor(partner_b_ligand))
 })
 
-
+neurons_top_ligands_list[[1]] %>% dplyr::select(partner_a_receptor, partner_b_ligand) %>% distinct()
 # sensory neurons
 labels <- data.frame(label = c("SORL1" = "APP ",
                                "TNFRSF21" = "APP ", 
@@ -1569,37 +1772,41 @@ labels <- data.frame(label = c("SORL1" = "APP ",
                                "PLXNA4" = "APP,APLP2 ", 
                                "CALCR" = "CALCA,CALCB ",
                                "RAMP1_complex" = "CALCA,CALCB ", 
-                               "ADGRG6" = "PRNP ", 
-                               "ADGRG5" = "THY1 ", 
+                               "ADGRE5" = "THY1 ", 
                                "SCARA5" = "FTH1 ", 
+                               "GRPR" = "NMB",
+                               "NMBR" = "NMB",
                                "GPR37L1" = "PSAP ", 
                                "GPR37" = "PSAP ", 
                                "TACR1" = "TAC1 ", 
                                "TACR2" = "TAC1 ", 
                                "PIGR" = "APLP2 "))
- neurons_top_ligands_list[[1]] %>% 
+
+neurons_top_ligands_list[[1]] %>% 
     ggplot(aes(factor(cell_a_receptor, levels), reorder(partner_a_receptor, cell_a_receptor))) +
     geom_point(aes(size = log1p(gene_a_receptor_expression))) +
-    geom_text(data = labels, aes(x = 0, y = 1:15, label = label), hjust = 1, size = 3, color = "grey20") +
-    geom_text(aes(x = 0, y = 16, label = "ligands"), hjust = 1) +
-    geom_text(aes(x = 40, y = 16, label = "receptors"), hjust = 0) +
+    geom_text(data = labels, aes(x = 0, y = 1:16, label = label), hjust = 1, size = 4, color = "grey20") +
+    geom_text(aes(x = 0.5, y = 17, label = "Sensory neuron's\ntop 10 ligands"), hjust = 1, size = 4) +
+    geom_text(aes(x = 39, y = 17, label = "receptors"), hjust = 0, size = 5) +
     coord_cartesian(clip = "off") +
     scale_x_discrete(name = NULL, expand = c(0,0), position = "top") +
-    scale_y_discrete(name = NULL, position = "right") +
-    scale_size_area(name = "receptor expression level", breaks = c(0.1, 0.5, 1), max_size = 13) +
-    theme(axis.text.x = element_text(size = 8, angle = -50, hjust = 1, vjust = 0.5, color = "grey20"), 
+    scale_y_discrete(name = NULL, position = "right",expand = c(0, 0)) +
+    scale_size_area(name = "receptors expression level", breaks = c(0.1, 0.5, 1), labels = c(0.1, 0.5, 1.0), max_size = 13) +
+    theme(axis.text.x = element_text(size = 12, angle = -50, hjust = 1, vjust = 0.5, color = "grey20"), 
+          axis.text.y = element_text(size = 12),
           axis.ticks = element_blank(), 
-          plot.margin = unit(c(6, 5, 1, 25), units = "mm"),  
+          plot.margin = unit(c(6, 5, 1, 35), units = "mm"),  
           panel.background = element_rect(fill = "white"),
           panel.grid.major = element_line(linetype = 2, linewidth = 0.3, color = "grey70"),
-          legend.position = "bottom") 
+          legend.position = "bottom", 
+          legend.title = element_text(size = 15),
+          legend.text = element_text(size = 14)) 
 
-ggsave("../data/kidney/kidney-map/results/cell_cell_communication/sensory_neuron_top_ligands_receptors_expression.pdf", 
+ggsave("../data/kidney/kidney-map/results/cell_cell_communication/Sensory_neuron_top_ligands_receptors_expression.tiff", 
        width = 15, height = 7)
 
 
 # sympathetic neurons
-neurons_top_ligands_list[[2]] %>% dplyr::select(partner_a_receptor, partner_b_ligand) %>% distinct()
 labels = c("SORL1" = "APP", 
            "TNFRSF21" = "APP", 
            "TREM2_receptor"  ="APP", 
@@ -1618,22 +1825,18 @@ labels = c("SORL1" = "APP",
           "GALR1" = "GAL", 
           "GALR2" = "GAL", 
           "GALR3" = "GAL", 
-          "PRLHR" = "NPY", 
           "HTR1A" = "SerotoninDopamin_byDDC", 
           "HTR1B" = "SerotoninDopamin_byDDC", 
           "HTR1F" = "SerotoninDopamin_byDDC", 
           "HTR2A" = "SerotoninDopamin_byDDC", 
           "HTR2B" = "SerotoninDopamin_byDDC", 
-          "HTR2C" = "SerotoninDopamin_byDDC", 
           "HTR3A" = "SerotoninDopamin_byDDC", 
           "HTR3B" = "SerotoninDopamin_byDDC", 
           "HTR4" = "SerotoninDopamin_byDDC", 
           "HTR5A" = "SerotoninDopamin_byDDC", 
           "HTR6" = "SerotoninDopamin_byDDC", 
           "HTR7" = "SerotoninDopamin_byDDC", 
-          "DRD1" = "SerotoninDopamin_byDDC\nDopamine_byDDC_and_SLC18A1\nDopamine_byDDC_and_SLC18A2", 
-          "DRD2" = "SerotoninDopamin_byDDC\nDopamine_byDDC_and_SLC18A1\nDopamine_byDDC_and_SLC18A2", 
-          "DRD3" = "SerotoninDopamin_byDDC\nDopamine_byDDC_and_SLC18A1\nDopamine_byDDC_and_SLC18A2", 
+          "DRD1" = "Dopamine_byDDC_and_SLC18A1\nDopamine_byDDC_and_SLC18A2", 
           "DRD4" = "SerotoninDopamin_byDDC\nDopamine_byDDC_and_SLC18A1\nDopamine_byDDC_and_SLC18A2",
           "NPY1R" = "NPY", 
           "NPY2R" = "NPY", 
@@ -1643,23 +1846,25 @@ labels = c("SORL1" = "APP",
 neurons_top_ligands_list[[2]] %>% 
     ggplot(aes(factor(cell_a_receptor, levels), partner_a_receptor)) +
     geom_point(aes(size = log1p(gene_a_receptor_expression))) +
-    geom_text(data = labels, aes(x = 0, y = 1:38, label = label), hjust = 1, size = 2.5, color = "grey20") +
-    geom_text(aes(x = 0, y = 39, label = "ligands"), hjust = 1, size = 5) +
-    geom_text(aes(x = 40, y = 39, label = "receptors"), hjust = 0, size = 5) +
+    geom_text(data = labels, aes(x = 0.5, y = 1:34, label = label), hjust = 1, size = 2, color = "grey20") +
+    geom_text(aes(x = 0.8, y = dim(labels)[1] + 1.5, label = "Sympathetic neuron's\ntop 10 ligands"), hjust = 1, size = 8) +
+    geom_text(aes(x = 39, y = dim(labels)[1] + 1.5, label = "receptors"), hjust = 0, size = 8) +
     coord_cartesian(clip = "off") +
-    scale_x_discrete(name = NULL, expand = c(0,0), position = "top") +
-    scale_y_discrete(name = NULL, position = "right") +
-    scale_size_area(name = "receptor expression level", breaks = c(0.1, 0.5, 1), max_size = 15) +
-    theme(axis.text.x = element_text(size = 10, angle = -50, hjust = 1, vjust = 0.5, color = "grey20"), 
-          axis.text.y = element_text(size = 13),
+    scale_x_discrete(name = NULL, expand = c(0, 0), position = "top") +
+    scale_y_discrete(name = NULL, position = "right", expand = c(0,0)) +
+    scale_size_area(name = "receptors expression level", breaks = c(0.1, 0.5, 1), max_size = 23) +
+    theme(axis.text.x = element_text(size = 25, angle = -50, hjust = 1, vjust = 0.5, color = "grey20"), 
+          axis.text.y = element_text(size = 17),
           axis.ticks = element_blank(), 
-          plot.margin = unit(c(6, 5, 1, 45), units = "mm"),  
+          plot.margin = unit(c(6, 5, 1, 85), units = "mm"),  
           panel.background = element_rect(fill = "white"),
           panel.grid.major = element_line(linetype = 2, linewidth = 0.3, color = "grey70"),
-          legend.position = "bottom") 
+          legend.position = "bottom", 
+          legend.title = element_text(size = 23), 
+          legend.text = element_text(size = 25))
 
-ggsave("../data/kidney/kidney-map/results/cell_cell_communication/sympathetic_top_ligands_receptors_expression.pdf", 
-       width = 25, height = 20)
+ggsave("../data/kidney/kidney-map/results/cell_cell_communication/Sympathetic_neuron_top_ligands_receptors_expression.tiff", 
+       width = 25, height = 15)
 ```
 
 ## neurons expressed receptors
@@ -1837,100 +2042,1855 @@ neurons_receptors_top_list <- neurons_receptors_top_list %>% lapply(function(x){
                gene_b_ligand = factor(gene_b_ligand, unique(gene_b_ligand)))
 })
 
-labels <- neurons_receptors_top_list[[1]] %>% dplyr::select( partner_b_ligand, partner_a_receptor) %>% distinct() %>% tibble::column_to_rownames("partner_b_ligand")
-labels$partner_a_receptor <- paste("  ", labels$partner_a_receptor)
+labels <- data.frame(label = c("NGF" = "NTRK1", "NTF3" = "NTRK1", "REN" = "ATP6AP2", 
+                               "NTF4" = "NGFR", 
+                               "BDNF" = "NGFR", "OSM" = "LIFR", "LIF" = "LIFR", 
+                               "TYROBP" = "CD44", "SIGLEC15" = "CD44", "SELE" = "CD44", 
+                               "SLIT2" = "ROBO2", "GABA_byGAD1_and_SLC6A12" = "GABBR1", 
+                               "GABA_byGAD1_and_SLC6A13" = "GABBR1", "GABA_byGAD1_and_SLC6A6" = "GABBR1", 
+                               "GABA_byGAD1_and_SLC6A8" = "GABBR1", "GABA_byGAD2_and_SLC6A1" = "GABBR1", 
+                               "GABA_byGAD2_and_SLC6A12" = "GABBR1", "GABA_byGAD2_and_SLC6A13" = "GABBR1", 
+                               "GABA_byGAD2_and_SLC6A6" = "GABBR1", "GABA_byGAD2_and_SLC6A8" = "GABBR1", 
+                               "GABA_byGAD1_and_SLC6A1" = "GABBR1", "GABA_byGAD1_and_SLC6A11" = "GABBR1", 
+                               "GABA_byGAD2_and_SLC6A11" = "GABBR1", "LRFN4" = "PTPRF", 
+                               "LRFN5" = "PTPRF", "LRRC4B" = "PTPRF", "LRRC4C" = "PTPRF", 
+                               "L1CAM" = "EZR", "Glutamate_byGLS_and_SLC1A1" = "GRIK1", 
+                               "Glutamate_byGLS_and_SLC1A2" = "GRIK1", "Glutamate_byGLS_and_SLC1A3" = "GRIK1", 
+                               "Glutamate_byGLS_and_SLC17A8" = "GRIK1", "Glutamate_byGLS2_and_SLC17A8" = "GRIK1", 
+                               "Glutamate_byGLS2_and_SLC1A1" = "GRIK1", "Glutamate_byGLS2_and_SLC1A2" = "GRIK1", 
+                               "Glutamate_byGLS2_and_SLC1A3" = "GRIK1", "Glutamate_byGLS_and_SLC17A7" = "GRIK1", 
+                               "Glutamate_byGLS2_and_SLC17A7" = "GRIK1", "Glutamate_byGLS_and_SLC1A7" = "GRIK1", 
+                               "Glutamate_byGLS_and_SLC17A6" = "GRIK1", "Glutamate_byGLS_and_SLC1A6" = "GRIK1",
+                               "Glutamate_byGLS2_and_SLC17A6" = "GRIK1", "Glutamate_byGLS2_and_SLC1A6" = "GRIK1"))
+
 
 neurons_receptors_top_list[[1]] %>% 
     ggplot(aes(factor(cell_b_ligand, levels), partner_b_ligand)) +
     geom_point(aes(size = log1p(gene_b_ligand_expression))) +
-    geom_text(data = labels, aes(x = 39.5, y = 1:43, label = partner_a_receptor), hjust = 0, size = 2, color = "grey20") +
-    scale_x_discrete(name = NULL, position = "top") +
-    scale_y_discrete(name = NULL) +
-    geom_text(x = -1.15, y = 45, label = "ligand") +
-    geom_text(x = 41.27, y = 45, label = "neuron\nreceptor") +
+    geom_text(data = labels, aes(x = 38.5, y = 1:43, label = label), hjust = 0, size = 2.5, color = "grey20") +
+    scale_x_discrete(name = NULL, position = "top", expand = c(0.01,0)) +
+    scale_y_discrete(name = NULL, expand = c(0,0)) +
+    geom_text(x = -1.5, y = 45, label = "ligand") +
+    geom_text(x = 42, y = 45, label = "Sensory neuron's\ntop 10 receptors") +
     coord_cartesian(clip = "off") +
-    scale_size_area(name = "ligands expression level", max_size = 6) +
-    theme(axis.text.x = element_text(angle = -60, hjust = 1, size = 6, color = "grey20"), 
-          axis.text.y = element_text(size = 6, color = "grey20"),
+    scale_size_area(name = "ligands expression level", max_size = 8, breaks = c(0.1, 0.5, 1.0), labels = c(0.1, 0.5, 1.0)) +
+    theme(axis.text.x = element_text(angle = -60, hjust = 1, size = 10, color = "grey20"), 
+          axis.text.y = element_text(size = 7, color = "grey20"),
           panel.background = element_rect(fill = "white"), 
           axis.ticks = element_blank(), 
           panel.grid.major = element_line(linetype = 2, linewidth = 0.1, color = "grey70"), 
           legend.position = "bottom", 
-          plot.margin = unit(c(0, 20, 0, 2), "mm"))
+          plot.margin = unit(c(0, 35, 0, 2), "mm"))
 
-ggsave("../data/kidney/kidney-map/results/cell_cell_communication/sensory_top_ligand_receptors_expression.pdf", width = 10)
+ggsave("../data/kidney/kidney-map/results/cell_cell_communication/Sensory_neuron_top_receptors_ligands_expression.tiff", 
+       width = 10)
 
 
-labels <- data.frame(label = c("ARGN" = "NCAM1", 
-                               "REN" = "ATP6AP2", 
-                               "EFNA1" = "EPHA5",
-                               "EFNA2" = "EPHA5",
-                               "EFNA3" = "EPHA5", 
-                               "EFNA4" = "EPHA5",
-                               "EFNA5" = "EPHA5", 
-                               "NGF" = "NTRK1,NGFR", 
-                               "NTF3" = "NTRK1,NGFR", 
-                               "APP" = "PLXNA4", 
-                               "APLP2" = "PLXNA4", 
-                               "NTF4" = "NGFR", 
-                               "BDNF" = "NGFR", 
-                               "RLN3" = "RXFP1", 
-                               "Acetylcholine_byCHAT_and_SLC10A4" = "AcetylcholineReceptor_a3b4", 
-                               "Acetylcholine_byCHAT_and_SLC18A3" = "AcetylcholineReceptor_a3b4", 
-                               "Acetylcholine_byCHAT_and_SLC5A7" = "AcetylcholineReceptor_a3b4", 
-                               "SCT" = "SCTR", 
-                               "VIP" = "SCTR", 
+labels <- data.frame(label = c("ARGN" = "NCAM1", "REN" = "ATP6AP2", "EFNA1" = "EPHA5", 
+                               "EFNA4" = "EPHA5", "EFNA5" = "EPHA5", "EFNA2" = "EPHA5", 
+                               "EFNA3" = "EPHA5", "NGF" = "NGFR,NTRK1", "NTF3"  ="NGFR,NTRK1",
+                               "APP" = "PLXNA4", "APLP2" = "PLXNA4", "NTF4" = "NGFR", "BDNF" = "NGFR", 
+                               "RLN3" = "RXFP1", "SCT" = "SCTR", "VIP" = "SCTR", 
                                "GABA_byGAD1_and_SLC6A12" = "GABBR1", 
-                               "GABA_byGAD1_and_SLC6A6" = "GABBR1", 
-                               "GABA_byGAD1_and_SLC6A8" = "GABBR1", 
-                               "GABA_byGAD2_and_SLC6A12" = "GABBR1", 
-                               "GABA_byGAD2_and_SLC6A6" = "GABBR1", 
-                               "GABA_byGAD2_and_SLC6A8" = "GABBR1", 
                                "GABA_byGAD1_and_SLC6A13" = "GABBR1", 
-                               "GABA_byGAD2_and_SLC6A1" = "GABBR1", 
-                               "GABA_byGAD2_and_SLC6A13" = "GABBR1", 
-                               "GABA_byGAD1_and_SLC32A1" = "GABBR1", 
-                               "GABA_byGAD1_and_SLC6A1" = "GABBR1", 
-                               "GABA_byGAD1_and_SLC6A11" = "GABBR1"))
-labels$label <- paste(" ", labels$label, sep = "")
-
+                               "GABA_byGAD1_and_SLC6A6" = "GABBR1",
+                               "GABA_byGAD1_and_SLC6A8" = "GABBR1",
+                               "GABA_byGAD2_and_SLC6A1" = "GABBR1",
+                               "GABA_byGAD2_and_SLC6A12" = "GABBR1",
+                               "GABA_byGAD2_and_SLC6A13" = "GABBR1",
+                               "GABA_byGAD2_and_SLC6A6" = "GABBR1",
+                               "GABA_byGAD2_and_SLC6A8" = "GABBR1",
+                               "GABA_byGAD1_and_SLC6A1" = "GABBR1",
+                               "GABA_byGAD1_and_SLC6A11" = "GABBR1",
+                               "SEMA3A" = "PlexinA4_complex1")) 
 
 neurons_receptors_top_list[[2]] %>% 
     ggplot(aes(factor(cell_b_ligand, levels), partner_b_ligand)) +
     geom_point(aes(size = log1p(gene_b_ligand_expression))) +
-    geom_text(data = labels, aes(x = 39.5, y = 1:31, label = label), hjust = 0, size = 2, color = "grey20") +
-    scale_x_discrete(name = NULL, position = "top") +
-    scale_y_discrete(name = NULL) +
-    geom_text(x = -1.15, y = 32, label = "ligand") +
-    geom_text(x = 41.27, y = 32, label = "receptor") +
+    geom_text(data = labels, aes(x = 38.5, y = 1:28, label = label), hjust = 0, size = 3, color = "grey20") +
+    scale_x_discrete(name = NULL, position = "top", expand = c(0.01, 0.01)) +
+    scale_y_discrete(name = NULL, expand = c(0, 0)) +
+    geom_text(x = -1.2, y = 30, label = "ligand", size = 3.5) +
+    geom_text(x = 38.5, y = 30, label = "Sympathetic Neuron's\ntop 10 receptors", hjust = 0, size = 3.5) +
     coord_cartesian(clip = "off") +
     scale_size_area(name = "ligands expression level", max_size = 6, breaks = c(0.1, 0.5, 1.0)) +
-    theme(axis.text.x = element_text(angle = -60, hjust = 1, size = 8, color = "grey20"), 
-          axis.text.y = element_text(size = 6, color = "grey20"),
+    theme(axis.text.x = element_text(angle = -60, hjust = 1, size = 10, color = "grey20"), 
+          axis.text.y = element_text(size = 7, color = "grey20"),
           panel.background = element_rect(fill = "white"), 
           axis.ticks = element_blank(), 
           panel.grid.major = element_line(linetype = 2, linewidth = 0.1, color = "grey70"), 
           legend.position = "bottom", 
-          plot.margin = unit(c(0, 30, 0, 2), "mm"))
+          plot.margin = unit(c(0, 40, 0, 2), "mm"))
 
-ggsave("../data/kidney/kidney-map/results/cell_cell_communication/sympathetic_top_ligand_receptors_expression.pdf",
-       width = 10)
+ggsave("../data/kidney/kidney-map/results/cell_cell_communication/Sympathetic_neuron_top_receptors_ligands_expression.tiff",
+       width = 10, height = 6)
 ```
 
-## neurons secreted proteins
+
+## neuron regulate Dendritic cells
+
+how neurons regulate dendritic cell's antigen processing and presentation
+
+```{r}
+library(org.Mm.eg.db)
+library(biomaRt)
+library(dplyr)
+
+entrez <- keys(org.Mm.eg.db)
+
+mmart <- useEnsembl(biomart = "ensembl", dataset = "mmusculus_gene_ensembl", mirror = "www")
+# searchAttributes(mmart, "GO")
+go_df <- getBM(attributes = c("mgi_symbol", "entrezgene_id", "go_id", "name_1006"), 
+               filters = "entrezgene_id", 
+               values = entrez, 
+               mart = mmart)
+
+go_df %>% dplyr::filter(grepl("dendritic cell", name_1006)) %>% dplyr::pull(name_1006) %>% unique
+
+antigen_processing_and_presentation <- go_df %>% 
+    dplyr::filter(name_1006 %in% c("antigen processing and presentation", 
+                                   "antigen processing and presentation of polysaccharide antigen via MHC class II", 
+                                   "antigen processing and presentation following phagocytosis", 
+                                   "antigen processing and presentation of peptide antigen via MHC class II", 
+                                   "dendritic cell antigen processing and presentation", 
+                                   "antigen processing and presentation of endogenous peptide antigen via MHC class II", 
+                                   "antigen processing and presentation of peptide antigen", 
+                                   "antigen processing and presentation of endogenous antigen",
+                                   "peptide antigen assembly with MHC class II protein complex",
+                                   "antigen processing and presentation of exogenous protein antigen via MHC class Ib, TAP-dependent")) %>% 
+    dplyr::pull(mgi_symbol) %>% 
+    unique 
+
+
+saveRDS(antigen_processing_and_presentation, 
+        "data/antigene_processing_and_presentation.rds")
+```
+
+```{r}
+library(nichenetr)
+library(tidygraph)
+library(ggraph)
+library(tidyverse)
+source("functions/idconv.R")
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+sensory <- sces[, sces$level3_cluster == "Sensory Neurons"]
+dendritics <- sces[, sces$level3_cluster == "Dendritic Cells"]
+
+lr_network <- readRDS("../data/nichenet/mouse/lr_network_mouse_21122021.rds")
+ligand_target_matrix <- readRDS("../data/nichenet/mouse/ligand_target_matrix_nsga2r_final_mouse.rds")
+gene_oi <- readRDS("data/antigene_processing_and_presentation.rds")
+```
+
+```{r}
+expressed_gene_sensory <- rownames(sensory)[counts(sensory) %>% apply(1, function(x){(sum(x > 0)/ncol(sensory)) > 0.05})] 
+expressed_gene_sensory <- idconv(expressed_gene_sensory, from_type = "GENEID", to_type = "SYMBOL", db = "mouse") %>% unname()
+
+expressed_gene_dendritic <- rownames(dendritics)[counts(dendritics) %>% apply(1, function(x){(sum(x > 0)/ncol(dendritics)) > 0.05})]
+expressed_gene_dendritic <- idconv(expressed_gene_dendritic, from_type = "GENEID", to_type = "SYMBOL", db = "mouse") %>% unname()
+
+expressed_ligands <- intersect(lr_network$from, expressed_gene_sensory)
+expressed_ligands %>% str
+
+expressed_receptors <- intersect(lr_network$to, expressed_gene_dendritic)
+expressed_receptors %>% str
+
+lr_network_expressed <- lr_network %>% dplyr::filter(from %in% expressed_ligands & to %in% expressed_receptors)
+
+background_expressed_gene_dendritic <- expressed_gene_dendritic %>% .[. %in% rownames(ligand_target_matrix)]
+potential_ligands <- lr_network_expressed$from %>% unique
+```
+
+```{r}
+ligands_activity <- predict_ligand_activities(geneset = gene_oi, 
+                                              background_expressed_genes = background_expressed_gene_dendritic, 
+                                              ligand_target_matrix = ligand_target_matrix, 
+                                              potential_ligands = potential_ligands)
+
+p_ligand_activity <- ligands_activity %>% 
+    dplyr::arrange(-aupr_corrected) %>% 
+    dplyr::top_n(10, wt = aupr_corrected) %>% 
+    ggplot(aes(x = 1, reorder(test_ligand, aupr_corrected))) +
+    geom_tile(aes(fill = aupr_corrected)) +
+    scale_x_discrete(name = NULL, expand = c(0, 0)) +
+    scale_y_discrete(name = NULL, expand = c(0,0)) +
+    scale_fill_gradient2(name = "ligand activity", 
+                         low = "whitesmoke", 
+                         high = "black",
+                         breaks = c(0, 0.01, 0.02, 0.03)) +
+    theme(axis.ticks.y = element_blank(), 
+          plot.title = element_text(hjust = 0.5, size = 10, face = "bold"), 
+          legend.position = "right", 
+          axis.text.y = element_text(size = 15)) 
+
+
+top_ligands <- ligands_activity %>% 
+    arrange(-aupr_corrected) %>% 
+    pull(test_ligand) %>% 
+    head(10)
+```
+
+```{r}
+ligands_targets_links <- lapply(X = top_ligands, 
+                                FUN = get_weighted_ligand_target_links,
+                                geneset = gene_oi, 
+                                ligand_target_matrix = ligand_target_matrix, 
+                                n = 250) %>% 
+    dplyr::bind_rows()
+```
+
+```{r}
+mat <- ligands_targets_links %>% 
+    tidyr::pivot_wider(names_from = target, values_from = "weight", values_fill = 0) %>% 
+    tidyr::pivot_longer(cols = -ligand, names_to = "target", values_to = "weight")
+
+
+p_ligand_target_links <- mat %>% 
+    ggplot(aes(target, reorder(ligand, weight))) +
+    geom_raster(aes(fill = weight)) +
+    scale_x_discrete(name = "Dendritic Cells expressed \nantigene presentation genes", expand = c(0,0)) +
+    scale_y_discrete(name = "ligands expressed by \nsensory neuron", expand = c(0,0)) +
+    scale_fill_gradient(name = "ligand-target \nregulation potential", low = "grey90", high = "black") + 
+    theme(axis.title = element_text(size = 15), 
+          axis.ticks = element_blank(), 
+          plot.margin = unit(c(0, 0, 0, 5), "mm"))
+```
+
+```{r}
+ligand_tf_matrix <- readRDS("../data/nichenet/mouse/ligand_tf_matrix_nsga2r_final_mouse.rds")
+weighted_network <- readRDS("../data/nichenet/mouse/weighted_networks_nsga2r_final_mouse.rds")
+ligands_signal_path <- get_ligand_signaling_path_with_receptor(ligand_tf_matrix = ligand_tf_matrix, 
+                                                               ligands_all = "Calca", 
+                                                               targets_all = c("H2-D1", "H2-K1"), 
+                                                               receptors_all = c("Ramp1"), 
+                                                               top_n_regulators = 4, 
+                                                               weighted_networks = weighted_network)
+
+df1 <- ligands_signal_path$sig %>% arrange(-weight)
+df2 <- ligands_signal_path$gr %>% 
+    dplyr::filter(from %in% (ligands_signal_path$gr %>% arrange(-weight) %>% pull(from) %>% unique() %>% head(2))) %>% 
+    arrange(-weight)
+
+calca_receptors <- lr_network %>% dplyr::filter(from == "Calca") %>% dplyr::pull(to) %>% unique
+ligand_signal_df <- rbind(df1, df2) %>% distinct(from, to, .keep_all = T) 
+
+# filtering out calca non-binding receptors
+ligand_signal_df <- ligand_signal_df %>% 
+    rowwise() %>% 
+    mutate(del = ifelse(from == "Calca" & !(to %in% calca_receptors), "yes", "no")) %>% 
+    dplyr::filter(del == "no") %>% 
+    dplyr::select(-del)
+```
+
+```{r}
+library(scuttle)
+
+tg <- as_tbl_graph(ligand_signal_df, directed = TRUE)
+nodes <- tg %>% as_tibble() %>% pull(name) %>% unique()
+reciver_expression <- dendritics %>% makePerCellDF(features = idconv(nodes[!(nodes == "Calca")]), use.dimred = F) %>% 
+    dplyr::select(starts_with("ENS")) %>% apply(2, mean)
+
+names(reciver_expression) <- idconv(names(reciver_expression), from_type = "GENEID", to_type = "SYMBOL", db = "mouse")
+
+nodes_expression <- c("Calca" = 1.832615) %>% append(values = reciver_expression) %>% round(digits = 4)
+set.seed(113)
+p_ligand_signal_path <- tg %>% 
+    mutate(expression = nodes_expression[name],
+           color = ifelse(name == "Calca", "red", 
+                          ifelse(name %in% c("H2-D1", "H2-K1"), "blue", 
+                                 ifelse(name %in% c("Stat1", "Fos"), "gold", "steelblue")))) %>% 
+    ggraph(layout = "nicely") +
+    geom_node_point(aes(color = color, size = expression)) +
+    geom_node_text(aes(label = name), color = "black", size = 3) +
+    geom_edge_link(aes(edge_width = weight),
+                   start_cap = circle(6, "mm"), 
+                   end_cap = circle(6, "mm"), 
+                   arrow = arrow(length = unit(0.3, "cm"))) +
+    scale_size_area(max_size = 15) +
+    scale_edge_width(range = c(0.3, 3)) +
+    scale_color_identity() +
+    theme_graph() +
+    theme(legend.position = "none", 
+          plot.margin = unit(c(0, 0, 0, 0),"mm"))
+p_ligand_signal_path
+```
+
+```{r}
+library(patchwork)
+
+((p_ligand_activity + p_ligand_target_links + plot_layout(widths = c(1, 4))) / p_ligand_signal_path ) +
+    plot_layout(heights = c(1, 1.2))
+
+ggsave("../data/kidney/kidney-map/results/sensory_dendritic_regulation.tiff", 
+       width = 10, height = 10)
+```
+
+
+### glomerular endothelial interaction with Podocytes
 
 ```{r}
 library(dplyr)
 library(tidyr)
 library(stringr)
+library(scuttle)
+source("functions/idconv.R")
 
 means_long <- readRDS("../data/kidney/kidney-map/results/cell_cell_communication/means_long.rds")
 
-# remove all secreted interactions
-means_long %>% dplyr::filter((receptor_a == "False" & receptor_b == "False") & secreted == "False") %>% 
-    dplyr::filter(cell_a %in% c("Sensory Neurons", "Sympathetic Neurons")) %>% pull(interacting_pair) %>% unique
+glomer_podocytes_interactions <- means_long %>% dplyr::filter((cell_a == "Podocytes" & cell_b == "Glomerular Endothelial")|(cell_a == "Glomerular Endothelial" & cell_b == "Podocytes"))
+
+# filter out non ligand-receptor interactions
+glomer_podocytes_interactions <- glomer_podocytes_interactions %>% dplyr::filter(!(receptor_a == "False" & receptor_b == "False"))
+
+glomer_endo_ligands <- glomer_podocytes_interactions %>% 
+    dplyr::rowwise() %>% 
+    dplyr::filter((receptor_a == "False" & cell_a == "Podocytes") | (receptor_b == "False" & cell_b == "Podocytes")) %>% 
+    dplyr::pull(partner_a) %>% unique
+complex_input <- read.csv("../data/cellphonedb/v4.1.0/complex_input.csv") %>% tibble::column_to_rownames("complex_name")
+
+glomer_endo_ligands <- sapply(glomer_endo_ligands, 
+                              function(x){
+                                  ifelse(grepl("^simple:", x), 
+                                         gsub("^simple:", "", x),
+                                         complex_input[gsub("^complex:", "", x), 1:5, drop = T] %>% unlist() %>% str_c(collapse = ",") %>% str_replace(",{1,}$", ""))
+                              }) %>% unname()
+
+glomer_ligands <- glomer_endo_ligands %>% 
+    str_c(collapse = ",") %>% 
+    str_split(",") %>% 
+    unlist() %>% 
+    idconv(from_type = "UNIPROTID", to_type = "SYMBOL", db = "human") %>% 
+    unname %>% na.omit() %>% as.character()
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated_human.rds")
+glomer_ligands <- glomer_ligands[glomer_ligands %in% rownames(sces)]
+
+sces_agg <- aggregateAcrossCells(sces, 
+                                 ids = sces$cell_type == "Podocytes", 
+                                 statistics = "mean", 
+                                 use.assay.type = "logcounts", 
+                                 subset.row = glomer_ligands)
+
+stats <- sces_agg %>% logcounts() %>% .[, 2, drop = T] %>% sort(decreasing = T)
+
+library(fgsea)
+library(biomaRt)
+library(org.Mm.eg.db)
+mmart <- useEnsembl(biomart = "ensembl", dataset = "mmusculus_gene_ensembl", mirror = "www")
+searchAttributes(mmart, "entrez")
+gene_df <- getBM(attributes = c("mgi_symbol", "mgi_description"), 
+                 filters = "entrezgene_id", 
+                 values = keys(org.Mm.eg.db), 
+                 mart = mmart)
+gene_df %>% dplyr::filter(grepl("growth factor", mgi_description))
+
+glomer_ligands_gsea <- fgsea(pathways = gs,
+                             stats = stats, 
+                             eps = 0, 
+                             minSize = 1, 
+                             maxSize = 1000)
+glomer_ligands_gsea %>% as.data.frame() %>% dplyr::arrange(pval)
+```
+
+# catecholamine receptors expression along renal tubule and collecting ducts
+
+```{r}
+library(scuttle)
+library(dplyr)
+library(SingleCellExperiment)
+library(scater)
+library(AnnotationHub)
+library(tidyr)
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+ah <- AnnotationHub()
+query(ah, c("EnsDb", "Mus musculus"))
+ensdb <- ah[["AH109655"]]
+
+
+adrs <- data.frame(ensembl = rownames(sces), 
+                   symbol = mapIds(ensdb, rownames(sces), keytype = "GENEID", column = "SYMBOL"))
+adrs <- adrs %>% dplyr::filter(grepl("^Adr(a|b)[0-9]{1,}", symbol)) %>% dplyr::arrange(symbol)
+rownames(adrs) <- adrs$symbol
+
+adrs_expression_df <- aggregateAcrossCells(sces, 
+                     ids = sces$level3_cluster, 
+                     statistics = "mean", 
+                     subset.row = adrs$ensembl,
+                     use.assay.type = "logcounts") %>% 
+    makePerCellDF(features = adrs$ensembl, 
+                  use.dimred = F, 
+                  assay.type = "logcounts") %>% 
+    dplyr::select(-c(1:13)) 
+
+colnames(adrs_expression_df) <- mapIds(ensdb, keys = colnames(adrs_expression_df), keytype = "GENEID", column = "SYMBOL")
+adrs_expression_df <- adrs_expression_df %>% tibble::rownames_to_column("cell_type") %>% dplyr::filter(grepl("^(PTS|LOH|DCT|CNT|CCD|OMCD|IMCD)", cell_type)) %>% 
+    tibble::column_to_rownames("cell_type")
+
+breaks <- seq(range(adrs_expression_df)[1], range(adrs_expression_df)[2], by = 0.001)
+library(pheatmap)
+tiff("../data/kidney/kidney-map/results/catecholamine/catecholamine_recepors_expressions.tiff", width = 1000 * 2, height = 500 * 2)
+pheatmap(t(adrs_expression_df), 
+         cluster_rows = F, 
+         cluster_cols = F, 
+         breaks = breaks,
+         color = colorRampPalette(c("white", "black"))(length(breaks)), 
+         border_color = "grey90", 
+         angle_col = 315, 
+         fontsize_col = 30, 
+         fontsize_row = 30, 
+         legend_breaks = c(0, 0.2), 
+         legend_labels = c("low", "high"), 
+         fontsize = 30)
+dev.off()
+```
+
+# endothelium
+
+```{r}
+library(SingleCellExperiment)
+library(scuttle)
+library(magrittr)
+library(cluster)
+library(AnnotationHub)
+ah <- AnnotationHub()
+query(ah, c("EnsDb", "Mus Musculus"))
+ensdb <- ah[["AH109655"]]
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+endo <- sces[, sces$level3_cluster == "Endothelial"]
+para_endo <- sces[, sces$level3_cluster == "paravertebral Endothelial"]
+glomer_endo <- sces[, sces$level3_cluster == "Glomerular Endothelial"]
+
+set.seed(101)
+endo_clusters <- clara(reducedDim(endo, "corrected"), 
+                       k = 3, metric = "euclidean", 
+                       stand = F, 
+                       cluster.only = TRUE, 
+                       samples = 50, 
+                       sampsize = 150)
+endo_clusters %>% table
+endo$agg_cluster <- endo_clusters[colnames(endo)]
+
+set.seed(102)
+para_endo_clusters <- clara(x = reducedDim(para_endo, "corrected"), 
+                            k = 3, 
+                            metric = "euclidean", 
+                            stand = F, 
+                            cluster.only = T, 
+                            samples = 50, 
+                            sampsize = 150)
+para_endo_clusters %>% table
+para_endo$agg_cluster <- para_endo_clusters[colnames(para_endo)]
+
+
+set.seed(103)
+glomer_endo_cluster <- clara(x = reducedDim(glomer_endo, "corrected"), 
+                             k = 3, 
+                             metric = "euclidean", 
+                             stand = F, 
+                             cluster.only = T, 
+                             samples = 50, 
+                             sampsize = 150)
+glomer_endo_cluster %>% table
+glomer_endo$agg_cluster <- glomer_endo_cluster[colnames(glomer_endo)]
+
+endo_agg <- aggregateAcrossCells(endo, 
+                                 ids = endo$agg_cluster, 
+                                 statistics = "sum")
+para_end_agg <- aggregateAcrossCells(para_endo, 
+                                     ids = para_endo$agg_cluster, 
+                                     statistics = "sum")
+glomer_endo_agg <- aggregateAcrossCells(glomer_endo, 
+                                        ids = glomer_endo$agg_cluster, 
+                                        statistics = "sum")
+identical(rownames(endo_agg), rownames(glomer_endo_agg))
+identical(rownames(glomer_endo_agg), rownames(para_end_agg))
+
+counts <- cbind(counts(endo_agg), counts(para_end_agg), counts(glomer_endo_agg)) %>% 
+    magrittr::set_colnames(value = c(paste(rep("Endothelial", 3), 1:3, sep = "_"), 
+                                     paste(rep("paravertebral Endothelial", 3), 1:3, sep = "_"), 
+                                     paste(rep("Glomerular Endothelial", 3), 1:3, sep = "_"))) 
+samples <- data.frame(sample = rep(c("Endothelial", "paravertebral Endothelial", "Glomerular Endothelial"), each = 3))
+group <- factor(rep(c("Endothelial", "paravertebral Endothelial", "Glomerular Endothelial"), each = 3), 
+                levels = c("Endothelial", "paravertebral Endothelial", "Glomerular Endothelial"))
+genes <- data.frame(ensembl = rownames(counts), 
+                    symbol = mapIds(ensdb, keys = rownames(counts), 
+                                    keytype = "GENEID", column = "SYMBOL"))
+
+library(edgeR)
+y <- DGEList(counts = counts, 
+             samples = samples, 
+             group = group, 
+             genes = genes)
+
+keep <- filterByExpr(y, group = y$samples$group)
+keep %>% table
+y <- y[keep, , keep.lib.sizes = F]
+y <- calcNormFactors(y, method = "TMM")
+y$samples$norm.factors
+
+plotMDS(y)
+
+design <- model.matrix(~ 0 + y$samples$group)
+colnames(design) <- c("Endothelial", "paravertebral_Endothelial", "Glomerular_Endothelial")
+
+contrast_matrix <- makeContrasts(
+    para_endo_VS_Endo = paravertebral_Endothelial - Endothelial, 
+    glomer_endo_VS_Endo = Glomerular_Endothelial - Endothelial, 
+    glomer_endo_VS_para_endo = Glomerular_Endothelial- paravertebral_Endothelial,
+    levels = colnames(design)
+)
+
+v <- voom(y, design = design, plot = TRUE)
+vfit <- lmFit(v, design = design)
+vfit <- contrasts.fit(vfit, contrasts = contrast_matrix)
+efit <- eBayes(vfit)
+plotSA(efit)
+
+efit %>% decideTests() %>% summary
+efit$coefficients
+
+para_endo_2_endo <- topTable(efit, coef = "para_endo_VS_Endo", number = Inf)
+write.csv(para_endo_2_endo, 
+          "../data/kidney/kidney-map/results/endothelium/para_endo_to_endo_DEGs.csv", 
+          row.names = F, quote = F)
+
+glomer_endo_2_endo <- topTable(efit, coef = "glomer_endo_VS_Endo", number = Inf)
+write.csv(glomer_endo_2_endo, 
+          "../data/kidney/kidney-map/results/endothelium/glomer_endo_to_endo_DEGs.csv", 
+          quote = F, row.names = F)
+
+glomer_endo_2_para_endo <- topTable(efit, coef = "glomer_endo_VS_para_endo", number = Inf)
+write.csv(glomer_endo_2_para_endo, 
+          "../data/kidney/kidney-map/results/endothelium/glomer_endo_to_para_endo_DEGs.csv", 
+          quote = F, row.names = F)
+
+top_genes <- c(glomer_endo_2_endo %>% rownames %>% head(50), 
+               para_endo_2_endo %>% rownames %>% head(50)) %>% unique
+top_genes %>% str
+endothelium <- sces[, sces$cell_type %in% c("Endothelial", "Glomerular Endothelial", "paravertebral Endothelial")]
+
+agg_log <- aggregateAcrossCells(endothelium, 
+                                ids = endothelium$level3_cluster, 
+                                statistics = "mean", 
+                                use.assay.type = "logcounts") %>% logcounts
+
+agg_log <- agg_log[top_genes, ]
+colnames(agg_log) <- c("Endothelial", "glomerular Endothelial", "paravertebral Endothelial")
+
+rownames(agg_log) <- mapIds(ensdb, 
+                            keys = rownames(agg_log), 
+                            keytype = "GENEID", 
+                            column = "SYMBOL")
+pdf("../data/kidney/kidney-map/results/endothelium/endothelium_top_genes.pdf",
+    width = 10, height = 4)
+
+library(pheatmap)
+pheatmap(t(agg_log), 
+         breaks = seq(range(agg_log)[1], range(agg_log)[2], by = 0.01), 
+         color = colorRampPalette(c("white", "yellow", "red"))(length(seq(range(agg_log)[1], range(agg_log)[2], by = 0.01))), 
+         border_color = "grey90", 
+         cluster_rows = T, 
+         fontsize_row = 7, 
+         fontsize_col = 3.5, 
+         angle_col = 315)
+dev.off()
 ```
 
 ```{r}
-complex_input["integrin_a2b1_complex", ]
+library(fgsea)
+library(biomaRt)
+library(magrittr)
+para_endo_2_endo <- read.csv("../data/kidney/kidney-map/results/endothelium/para_endto_to_endo_GDEs.csv")
+stats_para_endo_to_endo <- setNames(sign(para_endo_2_endo$logFC) * -(log10(para_endo_2_endo$P.Value)), para_endo_2_endo$ensembl)
+
+glomer_endo_2_endo <- read.csv("../data/kidney/kidney-map/results/endothelium/glomer_endo_to_endo_DEGs.csv")
+stats_glomer_endo_to_endo <- setNames(sign(glomer_endo_2_endo$logFC)* -(log10(glomer_endo_2_endo$P.Value)), glomer_endo_2_endo$ensembl)
+
+mmart <- useEnsembl(biomart = "ensembl", dataset = "mmusculus_gene_ensembl", mirror = "www")
+searchAttributes(mmart, "GO")
+gene_df <- getBM(attributes = c("go_id", "ensembl_gene_id", "name_1006", "namespace_1003", "go_linkage_type"), 
+                 filters = "ensembl_gene_id", 
+                 values = names(stats_para_endo_to_endo), 
+                 mart = mmart)
+
+evidence_codes <- c("EXP", "IDA", "IPI", "IMP", "IGI", "IEP", 
+                    "HTP", "HDA", "HMP", "HGI", "HEP", 
+                    "IBA", "IBD", "IKR", "IRD")
+gene_df <- gene_df %>% dplyr::filter(go_linkage_type %in% evidence_codes)
+
+gs <- split(gene_df$ensembl_gene_id, gene_df$name_1006)
+
+para_endo_gsea <- fgsea(pathways = gs, 
+                        stats = stats_para_endo_to_endo, 
+                        minSize = 10, 
+                        maxSize = 1000)
+
+para_endo_gsea <- para_endo_gsea[order(para_endo_gsea$pval, decreasing = F), ]
+para_endo_gsea <- para_endo_gsea %>% as.data.frame() %>% dplyr::arrange(pval, NES)
+saveRDS(para_endo_gsea, 
+        "../data/kidney/kidney-map/results/endothelium/para_endo_gsea.rds")
+
+
+glomer_endo_gsea <- fgsea(pathways = gs, 
+                          stats = stats_glomer_endo_to_endo, 
+                          minSize = 10, 
+                          maxSize = 1000)
+glomer_endo_gsea <- glomer_endo_gsea[order(glomer_endo_gsea$pval, decreasing = F), ]
+glomer_endo_gsea <- glomer_endo_gsea %>% as.data.frame() %>% dplyr::arrange(pval, NES)
+saveRDS(glomer_endo_gsea, 
+        "../data/kidney/kidney-map/results/endothelium/glomer_endo_gsea.rds")
 ```
+
+```{r}
+library(ggplot2)
+library(magrittr)
+
+para_endo_gsea <- readRDS("../data/kidney/kidney-map/results/endothelium/para_endo_gsea.rds")
+glomer_endo_gsea <- readRDS("../data/kidney/kidney-map/results/endothelium/glomer_endo_gsea.rds")
+para_to_endo_gsea_top20 <- para_endo_gsea %>% dplyr::filter(NES > 0) %>% dplyr::arrange(pval) %>% head(20) %>% 
+    rbind(para_endo_gsea %>% dplyr::filter(NES < 0) %>% dplyr::arrange(pval) %>% head(20))
+
+para_to_endo_gsea_top20 <- para_to_endo_gsea_top20 %>% 
+    dplyr::mutate(log10pval = ifelse(NES > 0, -log10(pval), log10(pval)), 
+                  colour = ifelse(NES > 0, "tomato", "steelblue")) %>% 
+    dplyr::group_by(NES) %>% 
+    dplyr::arrange(-log10pval) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::mutate(y = 40:1)
+
+
+glomer_endo_gsea_top20 <- glomer_endo_gsea %>% dplyr::filter(NES > 0) %>% dplyr::arrange(pval) %>% head(20) %>% 
+    rbind(glomer_endo_gsea %>% dplyr::filter(NES <0) %>% dplyr::arrange(pval) %>% head(20))
+
+glomer_endo_gsea_top20 <- glomer_endo_gsea_top20 %>% 
+    dplyr::mutate(log10pval = ifelse(NES >0, -log10(pval), log10(pval)), 
+                  colour = ifelse(NES > 0, "tomato", "steelblue")) %>% 
+    dplyr::group_by(NES) %>% 
+    dplyr::arrange(-log10pval) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::mutate(y = 40:1)
+
+size <- 4
+
+p_para <- para_to_endo_gsea_top20 %>% 
+    ggplot(aes(log10pval, reorder(pathway, log10pval))) +
+    geom_bar(aes(fill = colour), stat = "identity") +
+    geom_text(data = para_to_endo_gsea_top20[para_to_endo_gsea_top20$NES > 0, ], aes(x = -0.2, y = y, label = pathway), hjust = 1, size = size) +
+    geom_text(data = para_to_endo_gsea_top20[para_to_endo_gsea_top20$NES < 0, ], aes(x = 0.2, y = y, label = pathway), hjust = 0, size = size) +
+    scale_y_discrete(name = NULL, label = NULL) +
+    scale_x_continuous(name = "-log10 P Value", 
+                       breaks = c(-35, -30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25), 
+                       labels = c(35, 30, 25, 20, 15, 10, 5, 0, 5, 10, 15, 20, 25), 
+                       limits = c(-35,25)) +
+    scale_fill_identity() +
+    theme_classic() +
+    ggtitle("Top 40 enriched gene sets", 
+            subtitle = "Paravertebral endothelial v.s. Endothelial") +
+    theme(axis.text.y = element_text(size = 18, face = "bold"), 
+          axis.text.x = element_text(size = 18, face = "bold"),
+          axis.title.x = element_text(size = 20),
+          plot.title = element_text(size = 35), 
+          plot.subtitle = element_text(size = 25),
+          panel.grid.major.y = element_line(linetype = 2, linewidth = 0.4), 
+          axis.ticks.y = element_blank())
+
+p_glomer <- glomer_endo_gsea_top20 %>% 
+    ggplot(aes(log10pval, reorder(pathway, log10pval))) +
+    geom_bar(aes(fill = colour), stat = "identity") +
+    geom_text(data = glomer_endo_gsea_top20[glomer_endo_gsea_top20$NES > 0, ], aes(x = -0.2, y = y, label = pathway), hjust = 1, size = size) +
+    geom_text(data = glomer_endo_gsea_top20[glomer_endo_gsea_top20$NES < 0, ], aes(x = 0.2, y = y, label = pathway), hjust = 0, size = size) +
+    scale_fill_identity() +
+    scale_x_continuous(name = "-log10 P Value", 
+                       breaks = c(-40, -35, -25, -15, -10, -5, 0, 5, 10, 15, 20, 25), 
+                       labels = c(40, 35, 25, 15, 10, 5, 0, 5, 10, 15, 20, 25), 
+                       limits = c(-40, 25)) +
+    scale_y_discrete(name = NULL, label = NULL) +
+    theme_classic() +
+    ggtitle("Top 40 enriched gene sets", 
+            subtitle = "Glomerulur endothelial v.s. Endothelial") +
+    theme(axis.text.y = element_text(size = 18, face = "bold"), 
+          axis.text.x = element_text(size = 18, face = "bold"),
+          axis.title.x = element_text(size = 20),
+          plot.title = element_text(size = 35), 
+          plot.subtitle = element_text(size = 25), 
+          panel.grid.major.y = element_line(linetype = 2, linewidth = 0.4), 
+          axis.ticks.y = element_blank())
+
+library(patchwork)
+p_para + p_glomer
+
+ggsave("../data/kidney/kidney-map/results/endothelium/endothelium_top_gsea.tiff", 
+       width = 30, height = 12, limitsize = F)
+```
+
+```{r}
+library(VennDiagram)
+library(dplyr)
+library(tidyr)
+
+diff_para_endo_to_endo <- read.csv("../data/kidney/kidney-map/results/endothelium/para_endo_to_endo_DEGs.csv") %>% 
+    dplyr::filter(P.Value < 0.05) %>% 
+    dplyr::pull(ensembl) %>% unique
+
+diff_glomer_endo_to_endo <- read.csv("../data/kidney/kidney-map/results/endothelium/glomer_endo_to_endo_DEGs.csv") %>% 
+    dplyr::filter(P.Value < 0.05) %>% 
+    dplyr::pull(ensembl) %>% 
+    unique
+
+diff_glomer_endo_to_para_endo <- read.csv("../data/kidney/kidney-map/results/endothelium/glomer_endo_to_para_endo_DEGs.csv") %>% 
+    dplyr::filter(P.Value < 0.05) %>% 
+    dplyr::pull(ensembl) %>% 
+    unique
+
+
+venn.diagram(x = list(glomer_to_endo = diff_glomer_endo_to_endo, 
+                      glomer_to_para_endo = diff_glomer_endo_to_para_endo, 
+                      diff_para_endo_2_endo = diff_para_endo_to_endo), 
+             filename = "../data/kidney/kidney-map/results/endothelium/venn_endo.tiff", 
+             category.names = c("Glomerular endothelial v.s. Endothelial", 
+                                "Paravertebral endothelial v.s. Glomerular endothelial", 
+                                "Edothelial v.s. Paravertebral endothelial"), 
+             resolution = 300, 
+             imagetype = "tiff", 
+             print.mode = "raw", 
+             fill = RColorBrewer::brewer.pal(3, "Set1"), 
+             cat.default.pos = "text", 
+             cat.cex = 0.8)
+```
+
+## endothelia across cortex, outer medulla, inner medulla
+
+```{r}
+library(cluster)
+library(dplyr)
+library(SingleCellExperiment)
+library(scuttle)
+library(edgeR)
+library(limma)
+library(AnnotationHub)
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+endothelial <- sces[, sces$level3_cluster == "Endothelial" & sces$location %in% c("Cortex", "outer medulla", "inner medulla")]
+
+cortex_endo <- endothelial[, (endothelial$location == "Cortex" & (endothelial$geo_accession != "GSE146912"))]
+outer_medulla_endo <- endothelial[, endothelial$location == "outer medulla"]
+inner_medulla_endo <- endothelial[, endothelial$location == "inner medulla"]
+
+set.seed(104)
+cortex_endo_cluster <- clara(reducedDim(cortex_endo, "corrected"), 
+                             k = 3, 
+                             metric = "euclidean", 
+                             stand = F, 
+                             cluster.only = T, 
+                             samples = 50, 
+                             sampsize = 500)
+cortex_endo_cluster %>% table
+cortex_endo_cluster %>% str
+cortex_endo$agg_cluster <- cortex_endo_cluster[colnames(cortex_endo)]
+
+set.seed(105)
+outer_medulla_endo_cluster <- clara(reducedDim(outer_medulla_endo, "corrected"), 
+                                    k = 3, 
+                                    metric = "euclidean", 
+                                    stand = F, 
+                                    cluster.only = T, 
+                                    samples = 50, 
+                                    sampsize = 500)
+outer_medulla_endo_cluster %>% table
+outer_medulla_endo$agg_cluster <- outer_medulla_endo_cluster[colnames(outer_medulla_endo)]
+
+
+set.seed(106)
+inner_medulla_endo_cluster <- clara(reducedDim(inner_medulla_endo, "corrected"), 
+                                    k = 3, 
+                                    metric = "euclidean", 
+                                    stand = F, 
+                                    cluster.only = T, 
+                                    samples = 50, 
+                                    sampsize = 500)
+inner_medulla_endo_cluster %>% table
+inner_medulla_endo$agg_cluster <- inner_medulla_endo_cluster[colnames(inner_medulla_endo)]
+```
+
+```{r}
+cortex_endo_agg <- aggregateAcrossCells(cortex_endo, 
+                                        ids = cortex_endo$agg_cluster, 
+                                        statistics = "sum", 
+                                        use.assay.type = "counts")
+outer_medulla_agg <- aggregateAcrossCells(outer_medulla_endo, 
+                                          ids = outer_medulla_endo$agg_cluster, 
+                                          statistics = "sum", 
+                                          use.assay.type = "counts")
+inner_medulla_endo_agg <- aggregateAcrossCells(inner_medulla_endo, 
+                                               ids = inner_medulla_endo$agg_cluster, 
+                                               statistics = "sum", 
+                                               use.assay.type = "counts")
+
+identical(rownames(cortex_endo_agg), rownames(outer_medulla_agg))
+identical(rownames(cortex_endo_agg), rownames(inner_medulla_endo_agg))
+
+counts <- Reduce(cbind, list(counts(cortex_endo_agg), counts(outer_medulla_agg), counts(inner_medulla_endo_agg)))
+counts %>% head
+colnames(counts) <- paste(rep(c("cortex_endo", "out_endo", "inner_endo"), each = 3), 1:3, sep = "_")
+ah <- AnnotationHub()
+query(ah, c("EnsDb", "Mus musculus"))
+ensdb <- ah[["AH109655"]]
+gene_df <- data.frame(ensembl = rownames(counts), 
+                      symbol = mapIds(ensdb, keys = rownames(counts), keytype = "GENEID", column = "SYMBOL"))
+
+y <- DGEList(counts = counts, 
+             samples = data.frame(sample = rep(c("Cortex", "outer medulla", "inner medulla"), each = 3)), 
+             group = factor(rep(c("Cortex", "outer medulla", "inner medulla"), each = 3), 
+                            levels = c("Cortex", "outer medulla", "inner medulla")), 
+             genes = gene_df)
+
+keep <- filterByExpr(y, group = y$samples$group)
+keep %>% table
+y <- y[keep, , keep.lib.sizes = F]
+y <- calcNormFactors(y)
+
+design <- model.matrix(~ 0 + y$samples$group)
+colnames(design) <- c("Cortex", "outer_medulla", "inner_medulla")
+
+contrast_matrix <- makeContrasts(
+    cortex_inner = Cortex - inner_medulla, 
+    outer_inner = outer_medulla - inner_medulla, 
+    levels = colnames(design)
+)
+
+v <- voom(y, design = design, plot = TRUE)
+
+vfit <- lmFit(v, design = design)
+vfit <- contrasts.fit(vfit, contrasts = contrast_matrix)
+efit <- eBayes(vfit)
+
+efit %>% decideTests() %>% summary
+
+cortex_to_inner <- topTable(efit, number = Inf, coef = "cortex_inner")
+outer_to_inner <- topTable(efit, number = Inf, coef = "outer_inner")
+
+write.csv(cortex_to_inner, 
+          "../data/kidney/kidney-map/results/endothelium/cortex_to_inner_DEGs.csv", 
+          row.names = F, quote = F)
+
+write.csv(outer_to_inner, 
+          "../data/kidney/kidney-map/results/endothelium/outer_to_inner_DEGs.csv", 
+          row.names = F, quote = F)
+```
+
+```{r}
+library(fgsea)
+library(biomaRt)
+cortex_to_inner <- read.csv("../data/kidney/kidney-map/results/endothelium/cortex_to_inner_DEGs.csv")
+outer_to_inner <- read.csv("../data/kidney/kidney-map/results/endothelium/outer_to_inner_DEGs.csv")
+
+stats_cortex_to_inner <- setNames(sign(cortex_to_inner$logFC) * -log10(cortex_to_inner$P.Value), cortex_to_inner$ensembl)
+stats_outer_to_inner <- setNames(sign(outer_to_inner$logFC) * -log10(outer_to_inner$P.Value), outer_to_inner$ensembl)
+
+mmart <- useEnsembl(biomart = "ensembl", dataset = "mmusculus_gene_ensembl")
+gene_df <- getBM(attributes = c("go_id", "ensembl_gene_id", "name_1006", "namespace_1003", "go_linkage_type"), 
+                 filters = "ensembl_gene_id", 
+                 values = names(stats_cortex_to_inner), 
+                 mart = mmart)
+evidence_codes <- c("EXP", "IDA", "IPI", "IMP", "IGI", "IEP", 
+                    "HTP", "HDA", "HMP", "HGI", "HEP", 
+                    "IBA", "IBD", "IKR", "IRD")
+gene_df <- gene_df %>% dplyr::filter(!is.na(go_id), go_linkage_type %in% evidence_codes)
+gs <- split(gene_df$ensembl_gene_id, gene_df$name_1006)
+
+cortex_to_inner_gsea <- fgsea(pathways = gs, 
+                              stats = stats_cortex_to_inner, 
+                              minSize = 10, 
+                              maxSize = 1000, 
+                              eps = 0)
+cortex_to_inner_gsea <- cortex_to_inner_gsea %>% as.data.frame() %>%  dplyr::arrange(-NES, pval)
+saveRDS(cortex_to_inner_gsea, 
+        "../data/kidney/kidney-map/results/endothelium/cortex_to_inner_gsea.rds")
+
+outer_to_inner_gsea <- fgsea(pathways = gs, 
+                             stats = stats_outer_to_inner, 
+                             minSize = 10, 
+                             maxSize = 1000, 
+                             eps = 0)
+outer_to_inner_gsea <- outer_to_inner_gsea %>% as.data.frame() %>% dplyr::arrange(-NES, pval)
+saveRDS(outer_to_inner_gsea, 
+        "../data/kidney/kidney-map/results/endothelium/outer_to_inner_gsea.rds")
+```
+
+```{r}
+library(ggplot2)
+library(patchwork)
+library(magrittr)
+
+outer_to_inner_gsea <- readRDS("../data/kidney/kidney-map/results/endothelium/outer_to_inner_gsea.rds")
+cortex_to_inner_gsea <- readRDS("../data/kidney/kidney-map/results/endothelium/cortex_to_inner_gsea.rds")
+
+
+p1 <- cortex_to_inner_gsea %>% 
+    head(20) %>% 
+    dplyr::mutate(log10pval = -log10(pval)) %>% 
+    ggplot(aes(log10pval, reorder(pathway, log10pval))) +
+    geom_bar(stat = "identity") +
+    scale_x_continuous(name = "-log10 P Value") +
+    scale_y_discrete(name = NULL) +
+    ggtitle("Top 20 enriched gene sets in \nCortex endothelial") +
+    theme_classic() +
+        theme(axis.text.y = element_text(size = 15, face = "bold"), 
+              axis.text.x = element_text(size = 15, face = "bold"),
+              axis.title.x = element_text(size = 25, face = "bold"),
+          plot.title = element_text(size = 35), 
+          panel.grid.major.y = element_line(linetype = 2, linewidth = 0.2))
+
+
+p2 <- outer_to_inner_gsea %>% 
+    head(20) %>% 
+    dplyr::mutate(log10pval = -log10(pval)) %>% 
+    ggplot(aes(log10pval, reorder(pathway, log10pval))) +
+    geom_bar(stat = "identity") +
+    scale_x_continuous(name = "-log10 P Value") +
+    scale_y_discrete(name = NULL) +
+    ggtitle("Top 20 enriched gene sets in \nouter medulla endothelial") +
+    theme_classic() +
+        theme(axis.text.y = element_text(size = 15, face = "bold"), 
+              axis.text.x = element_text(size = 15, face = "bold"),
+              axis.title.x = element_text(size = 25, face = "bold"),
+          plot.title = element_text(size = 35), 
+          panel.grid.major.y = element_line(linetype = 2, linewidth = 0.2))
+p1 + p2
+
+ggsave("../data/kidney/kidney-map/results/endothelium/cortex_outer_inner_gsea.tiff", 
+       width = 45, height = 15)
+```
+
+## stats change from cortex endothelial to glomeruler endothelial
+
+```{r}
+library(SingleCellExperiment)
+library(slingshot)
+library(magrittr)
+library(scater)
+library(scran)
+library(mclust)
+library(RColorBrewer)
+source("functions/idconv.R")
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+sces$level3_cluster %>% levels
+
+cell_ids <- (sces$level3_cluster %in% c("Endothelial", "Glomerular Endothelial")) & (sces$location == "Cortex")
+cell_ids %>% table
+
+cortex_endo <- sces[, cell_ids]
+rm(sces);gc()
+
+gene_stats <- perFeatureQCMetrics(cortex_endo, threshold = 0)
+table(gene_stats$detected > 0.1)
+
+cortex_endo <- cortex_endo[gene_stats$detected > 0.1, ]
+
+set.seed(123)
+cortex_endo <- runPCA(cortex_endo, exprs_values = "reconstructed", ntop = 1000)
+cortex_endo <- runTSNE(cortex_endo, dimred = "PCA", n_dimred = 4)
+
+
+set.seed(124)
+colData(cortex_endo)$clusters <- Mclust(reducedDim(cortex_endo, "TSNE"), G = 9)$classification
+colData(cortex_endo)$clusters %>% table
+
+cortex_endo <- slingshot(cortex_endo, clusterLabels = "clusters", 
+                         start.clus = 4, end.clus = 6, 
+                         reducedDim = "TSNE")
+
+
+plotReducedDim(cortex_endo, 
+               dimred = "TSNE", 
+               # color_by = idconv("Pi16"),
+               color_by = "clusters",
+               text_by = "clusters")
+```
+
+```{r}
+cortex_endo <- readRDS("../data/kidney/kidney-map/results/trajectory/cortex_endo.rds")
+colors <- colorRampPalette(brewer.pal(9, "YlOrRd"))(100) 
+
+point_colors <- colors[cut(cortex_endo$slingPseudotime_3, breaks = 100)]
+
+tiff("../data/kidney/kidney-map/results/trajectory/trajectory.tiff", 
+     width = 1000, height = 700)
+plot(reducedDim(cortex_endo, "TSNE"), col = point_colors, pch = 16, 
+     xaxt = "n", yaxt = "n", bty = "n", 
+     xlab = NA, ylab = NA)
+lines(SlingshotDataSet(cortex_endo), lwd = 3, col = "black", type = "curve", linInd = 3)
+legend(x = 24, y = 30, pch = 19, col = rev(colorRampPalette(brewer.pal(9, "YlOrRd"))(5)), 
+       legend = rep("", 5), title = "Pseudotime", xpd = TRUE, cex = 1.5)
+dev.off()
+```
+
+```{r}
+# Itm2b, Ubc
+coldata <- colData(cortex_endo)[, "cell_type", drop = F] %>% 
+    as.data.frame() %>% tibble::rownames_to_column("cell_ids")
+lc <- assay(cortex_endo,  1) %>% as.matrix() %>% as.data.frame() %>% 
+    tibble::rownames_to_column("ensembl") %>% 
+    dplyr::filter(ensembl %in% idconv(c("Itm2b", "Ubc"))) %>% 
+    tidyr::pivot_longer(cols = -ensembl, names_to = "cell_ids", values_to = "logcounts")
+df <- dplyr::left_join(coldata, lc, by = "cell_ids")
+df
+
+point_colors_itm2b <- colors[cut(df[df$ensembl == "ENSMUSG00000022108", ]$logcounts, breaks = 100)]
+point_colors_ubc <- colors[cut(df[df$ensembl == "ENSMUSG00000008348", ]$logcounts, breaks = 100)]
+```
+
+
+```{r}
+library(tradeSeq)
+library(BiocParallel)
+
+cortex_endo <- fitGAM(cortex_endo, sce = TRUE)
+cortex_endo$slingshot
+res <- associationTest(cortex_endo)
+write.csv(res, "../data/kidney/kidney-map/results/trajectory/association_test_res.csv", 
+          row.names = T, quote = F)
+saveRDS(cortex_endo, "../data/kidney/kidney-map/results/trajectory/cortex_endo.rds")
+```
+
+```{r}
+cortex_endo <- readRDS("../data/kidney/kidney-map/results/trajectory/cortex_endo.rds")
+res <- read.csv("../data/kidney/kidney-map/results/trajectory/association_test_res.csv", 
+                      row.names = 1)
+top_genes <- res[order(res$pvalue), ] %>% rownames() %>% head(200)
+top_genes <- idconv(top_genes, "GENEID", "SYMBOL") %>% na.omit
+p_cortex_endo <- cortex_endo[names(top_genes), ]
+rownames(p_cortex_endo) <- top_genes
+cortex_endo$clusters <- factor(cortex_endo$clusters, levels = c(4, 1, 3, 9, 2, 7, 5, 8, 6))
+
+# mtx <- logcounts(p_cortex_endo) %>% as.matrix
+mtx <- assay(p_cortex_endo, 1) %>% as.matrix()
+ann_df <- colData(p_cortex_endo)[, c("cell_type", "slingPseudotime_3")] %>% 
+    as.data.frame() %>% 
+    dplyr::rename(Pseudotime = 'slingPseudotime_3', 
+                  `cell type` = "cell_type") %>% 
+    dplyr::arrange(`cell type`, Pseudotime) %>% 
+    dplyr::filter(!is.na(Pseudotime))
+mtx <- mtx[, rownames(ann_df)]
+
+png("../data/kidney/kidney-map/results/trajectory/heatmap.png", 
+     width = 3000, height = 1500)
+pheatmap(t(mtx), 
+         cluster_rows = F, 
+         show_rownames = F, 
+         annotation_row = ann_df, 
+         annotation_colors = list(`cell type` = c("Cortex Endothelial" = "red", "Glomerular Endothelial" = "green"), 
+                                  Pseudotime = setNames(colorRampPalette(brewer.pal(9, "Blues"))(length(unique(ann_df$Pseudotime))), unique(ann_df$Pseudotime))),
+         color = rev(heat.colors(2000)),
+         fontsize_col= 12, 
+         fontsize = 23, 
+         breaks = seq(range(mtx)[[1]], range(mtx)[[2]], length.out = 2000), 
+         legend_breaks = c(min(mtx), max(mtx)), 
+         legend_labels = c("low",  "high"))
+
+dev.off()
+```
+
+
+```{r}
+tiff("../data/kidney/kidney-map/results/trajectory/Itm2b.tiff", width = 1000, height = 700)
+plot(reducedDim(cortex_endo[,colnames(cortex_endo) %in% rownames(ann_df)], "TSNE"), col = point_colors_itm2b, pch = 16, main = "Itm2b", 
+     xaxt = "n", yaxt = "n", bty = "n", xlab = NA, ylab = NA, cex.main = 4)
+lines(SlingshotDataSet(cortex_endo), lwd = 3, col = "black", type = "curve", linInd = 3)
+dev.off()
+
+
+tiff("../data/kidney/kidney-map/results/trajectory/ubc.tiff", width = 1000, height = 700)
+plot(reducedDim(cortex_endo[,colnames(cortex_endo) %in% rownames(ann_df)], "TSNE"), col = point_colors_ubc, pch = 16, main = "Ubc", 
+     xaxt = "n", yaxt = "n", bty = "n", xlab = NA, ylab = NA, cex.main = 4)
+lines(SlingshotDataSet(cortex_endo), lwd = 3, col = "black", type = "curve", linInd = 3)
+dev.off()
+```
+
+```{r}
+colData(cortex_endo)$cell_type = ifelse(cortex_endo$cell_type == "Endothelial", "Cortex Endothelial",
+                                        cortex_endo$cell_type)
+plotReducedDim(cortex_endo[, colnames(cortex_endo) %in% rownames(ann_df)], 
+               dimred = "TSNE", 
+               color_by = "cell_type", 
+               text_by = "cell_type") + 
+    theme(legend.position = "none")
+ggsave("../data/kidney/kidney-map/results/trajectory/cell_type.tiff", 
+       width = 10, height = 7)
+```
+
+
+
+## transcription factors between paravertabral, glomerular and kidney endothelial
+
+```{r}
+library(SingleCellExperiment)
+library(SCENIC)
+library(scater)
+library(magrittr)
+library(patchwork)
+source("functions/idconv.R")
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+sces$level3_cluster %>% levels
+ids <- (sces$level3_cluster %in% c("Endothelial", "Glomerular Endothelial", "paravertebral Endothelial")) & (sces$geo_accession %in% c("GSE129798", "GSE146912", "GSE175421"))
+ids %>% table
+
+endothelium <- sces[, ids]
+endothelium$level3_cluster %>% table
+
+set.seed(1001)
+sub_cells <- c(sample(colnames(endothelium[, endothelium$cell_type == "Endothelial"]), 500, replace = F), 
+               sample(colnames(endothelium[, endothelium$cell_type == "Glomerular Endothelial"]), 500, replace = F), 
+               sample(colnames(endothelium[, endothelium$cell_type == "paravertebral Endothelial"]), 500, replace = F))
+sub_cells %>% str
+
+sub_endothelium <- endothelium[, colnames(endothelium) %in% sub_cells]
+
+expr_mat <- logcounts(sub_endothelium) %>% as.matrix() %>% as.data.frame() %>% 
+    tibble::rownames_to_column("ensembl")
+expr_mat <- expr_mat %>% 
+    dplyr::mutate(symbol = idconv(ensembl, "GENEID", "SYMBOL")) %>% 
+    dplyr::relocate(symbol, .after = ensembl)
+
+expr_mat <- expr_mat %>% 
+    dplyr::filter(!is.na(symbol) & nchar(symbol) > 0) %>% 
+    dplyr::select(-ensembl) 
+
+expr_mat <- aggregate(expr_mat[, -1], by = list(symbol = expr_mat[, 1]), FUN = "sum")
+expr_mat <- expr_mat %>% tibble::column_to_rownames("symbol") %>% as.matrix()
+
+write.csv(as.matrix(expr_mat), "../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/int/exp_mat.rds")
+
+cellInfo <- colData(sub_endothelium) %>% 
+    as.data.frame() %>%
+    dplyr::select(level3_cluster) %>% 
+    dplyr::arrange(level3_cluster)
+
+colVars <- list(CellType = c(
+    "Endothelial" = "forestgreen", 
+    "Glomerular Endothelial" = "red3", 
+    "paravertebral Endothelial" = "magenta4"
+))
+
+saveRDS(cellInfo, "../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/int/cellInfo.rds")
+saveRDS(colVars, "../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/int/colVars.rds")
+```
+
+```{r}
+org <- "mgi"
+dbDir <- "/home/yincy/git/data/cisTarget_database/mouse/mm9"
+data("defaultDbNames")
+dbs <- defaultDbNames[[org]]
+dbs
+data("motifAnnotations_mgi_v9", package = "RcisTarget")
+motifAnnotations_mgi <- motifAnnotations_mgi_v9
+ScenicOptions <- initializeScenic(org = org,
+                                  dbDir = dbDir, 
+                                  dbs = dbs, 
+                                  nCores = 6)
+ScenicOptions@inputDatasetInfo$cellInfo <- "../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/int/cellInfo.rds"
+ScenicOptions@inputDatasetInfo$colVars <- "../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/int/colVars.rds"
+saveRDS(ScenicOptions, "../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/int/ScenicOptions.rds")
+```
+
+```{r}
+genesKetp <- geneFiltering(exprMat = expr_mat, 
+                           scenicOptions = ScenicOptions, 
+                           minCountsPerGene = 3 * 0.01 * ncol(expr_mat), 
+                           minSamples = 0.01 * ncol(expr_mat))
+
+genesKetp %>% str
+expr_mat <- expr_mat[genesKetp, ]
+
+runCorrelation(exprMat_filtered = expr_mat, 
+               scenicOptions = ScenicOptions)
+saveRDS(ScenicOptions, "../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/int/ScenicOptions.rds")
+```
+
+```{r}
+runGenie3(exprMat = expr_mat, scenicOptions = ScenicOptions)
+saveRDS(ScenicOptions, "../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/int/ScenicOptions.rds")
+```
+
+```{r}
+ScenicOptions <- runSCENIC_1_coexNetwork2modules(scenicOptions = ScenicOptions)
+ScenicOptions <- runSCENIC_2_createRegulons(scenicOptions = ScenicOptions, coexMethods = c("top5perTarget"))
+ScenicOptions <- runSCENIC_3_scoreCells(scenicOptions = ScenicOptions, exprMat = expr_mat)
+saveRDS(ScenicOptions, 
+        "../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/int/ScenicOptions.rds")
+```
+
+```{r}
+aucellApp <- plotTsne_AUCellApp(ScenicOptions, expr_mat)
+savedSelections <- shiny::runApp(aucellApp)
+
+# Save the modified thresholds:
+newThresholds <- savedSelections$thresholds
+ScenicOptions@fileNames$int["aucell_thresholds",1] <- "int/newThresholds.Rds"
+saveRDS(newThresholds, file=getIntName(ScenicOptions, "aucell_thresholds"))
+saveRDS(ScenicOptions, 
+        file="../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/int/ScenicOptions.rds") 
+
+ScenicOptions <- runSCENIC_4_aucell_binarize(ScenicOptions)
+```
+
+### visualization
+
+```{r}
+library(ggplot2)
+library(ggheatmap)
+library(pheatmap)
+library(dplyr)
+
+cellInfo <- readRDS("../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/int/cellInfo.rds") %>% 
+    dplyr::mutate(`cell type` = as.character(level3_cluster)) %>% 
+    dplyr::select(-level3_cluster) %>% 
+    dplyr::arrange(`cell type`)
+regulon_activity_continuous <- readRDS("../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/int/3.4_regulonAUC.Rds")
+
+regulon_activity_continuous <- regulon_activity_continuous@assays@data$AUC 
+regulon_activity_continuous <- regulon_activity_continuous %>% as.matrix() %>% .[, rownames(cellInfo)]
+regulon_activity_continuous[1:10, 1:10]
+
+ggheatmap(regulon_activity_continuous, 
+          cluster_cols = F, 
+          annotation_cols = cellInfo, 
+          annotation_color = list(`cell type` = c("Endothelial" = "red", "Glomerular Endothelial" = "blue", "paravertebral Endothelial" = "green")), 
+          cluster_rows = F)
+
+tiff("../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/regulon_activity_continuous.tiff", 
+     width = 5000, height = 1500, type = "cairo")
+pheatmap::pheatmap(t(regulon_activity_continuous), 
+                   color = colorRampPalette(c("black", "goldenrod", "yellow"))(1000), 
+                   show_colnames = T,
+                   show_rownames = F,
+                   cluster_cols = T, 
+                   cluster_rows = F,
+                   annotation_row = cellInfo, 
+                   fontsize = 40)
+dev.off()
+```
+
+```{r}
+library(pheatmap)
+library(magrittr)
+regulon_activity_binary <- readRDS("../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/int/4.1_binaryRegulonActivity.Rds")
+regulon_activity_binary[1:10, 1:10]
+regulon_activity_binary %>% rownames()
+cellInfo <- readRDS("../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/int/cellInfo.rds") %>% 
+    dplyr::mutate(level3_cluster = factor(level3_cluster, levels = c("Endothelial", "Glomerular Endothelial", "paravertebral Endothelial")), 
+                  `cell type` = level3_cluster) %>% 
+    dplyr::select(-level3_cluster) %>% 
+    dplyr::arrange(`cell type`) %>% 
+    tibble::rownames_to_column("cell_ids") %>% 
+    dplyr::filter(cell_ids %in% colnames(regulon_activity_binary)) %>% 
+    tibble::column_to_rownames("cell_ids")
+
+
+tiff("../data/kidney/kidney-map/results/SCENIC/paravertebral_glomerulur_kidney/regulon_activity_binary.tiff", 
+     width = 1000, height = 1000)
+pheatmap(mat = regulon_activity_binary[, rownames(cellInfo)], 
+         cluster_cols = F, 
+         show_colnames = F, 
+         show_rownames = T,
+         annotation_col = cellInfo, 
+         annotation_colors = list(`cell type` = c("Endothelial" = "red", 
+                                                  "Glomerular Endothelial" = "green", 
+                                                  "paravertebral Endothelial" = "blue")), 
+         color = colorRampPalette(c("white", "black"))(100), 
+         legend = T, 
+         legend_breaks = c(0, 1), 
+         legend_labels = c("Off", "On"), 
+         fontsize = 15, 
+         fontsize_row = 10,
+         treeheight_row = 70, 
+         clustering_method = "ward.D2")
+dev.off()
+```
+
+## transcription factors across cortex, outer and inner kidney endothelial
+
+```{r}
+library(SingleCellExperiment)
+library(SCENIC)
+library(scater)
+library(magrittr)
+library(patchwork)
+source("functions/idconv.R")
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+sces$level3_cluster %>% levels
+endothelium <- sces[, (sces$level3_cluster == "Endothelial") & sces$geo_accession == "GSE129798"]
+endothelium$location %>% table
+plotTSNE(endothelium, 
+         colour_by = "location") +
+    scale_color_discrete(name = "region") +
+
+plotTSNE(endothelium, 
+         colour_by = idconv("Irf1")) +
+    scale_color_continuous(name = "Irf1", type = "viridis") +
+
+plotTSNE(endothelium, 
+         colour_by = idconv("Lef1")) +
+    scale_color_continuous(name = "Lef1", type = "viridis") +
+
+plotTSNE(endothelium, 
+         colour_by = idconv("Nfat5")) +
+    scale_color_continuous(name = "Nfat5", type = "viridis") +
+    plot_layout(ncol = 2)
+
+
+ggsave("../data/kidney/kidney-map/results/SCENIC/TFs_expression.tiff", 
+       width = 10, height = 10)
+
+set.seed(1011)
+sample_ids <- sample(ncol(endothelium), 2000, replace = F)
+saveRDS(sample_ids, "../data/kidney/kidney-map/results/SCENIC/sample_ids.rds")
+sub_endothelium <- endothelium[, sample_ids] 
+
+sub_endothelium$location %>% table
+cellInfo <- colData(sub_endothelium) %>% 
+    as.data.frame() %>% 
+    dplyr::select(cell_ids, cell_type, location, mito_percent) %>% 
+    dplyr::mutate(cell_types = paste(cell_type, location, sep = "_"))
+cellInfo$cell_types %>% unique
+expr_mat <- counts(sub_endothelium) %>% as.matrix() %>% as.data.frame()
+expr_mat <- expr_mat %>% tibble::rownames_to_column("ensembl")
+expr_mat <- expr_mat %>% 
+    dplyr::mutate(symbol = idconv(ensembl, from_type = "GENEID", to_type = "SYMBOL", db = "mouse")) %>% 
+    dplyr::relocate(symbol, .after = ensembl)
+expr_mat <- expr_mat %>% dplyr::filter(!is.na(symbol)) %>% dplyr::select(-ensembl)
+expr_mat <- aggregate(expr_mat[, -1], by = list(symbol = expr_mat[, 1]), FUN = "sum")
+expr_mat <- expr_mat %>% tibble::column_to_rownames("symbol") %>% as.matrix()
+ids <- (nchar(rownames(expr_mat)) >= 1) 
+expr_mat <- expr_mat[ids, ]
+expr_mat[1:10, 1:10]
+write.csv(expr_mat, "../data/kidney/kidney-map/results/SCENIC/expr_mat.csv", 
+          row.names = TRUE, quote = F)
+# expr_mat <- read.csv("../data/kidney/kidney-map/results/SCENIC/expr_mat.csv")
+
+colVars <- list(CellType = c(
+    "Endothelial_Cortex" = "forestgreen", 
+    "Endothelial_outer medulla" = "red3", 
+    "Endothelial_inner medulla" = "magenta4"
+))
+
+# plot.new();legend(0, 1, fill = colVars$CellType,
+#                   legend = names(colVars$CellType), 
+#                   bty = "n")
+
+saveRDS(cellInfo, "../data/kidney/kidney-map/results/SCENIC/int/cellInfo.rds")
+saveRDS(colVars, "../data/kidney/kidney-map/results/SCENIC/int/colVars.rds")
+```
+
+```{r}
+org <- "mgi"
+dbDir <- "/home/yincy/git/data/cisTarget_database/mouse/mm9"
+data("defaultDbNames")
+dbs <- defaultDbNames[[org]]
+dbs
+data("motifAnnotations_mgi_v9", package = "RcisTarget")
+motifAnnotations_mgi <- motifAnnotations_mgi_v9
+ScenicOptions <- initializeScenic(org = org,
+                                  dbDir = dbDir, 
+                                  dbs = dbs, 
+                                  nCores = 6)
+ScenicOptions@inputDatasetInfo$cellInfo <- "../data/kidney/kidney-map/results/SCENIC/int/cellInfo.rds"
+ScenicOptions@inputDatasetInfo$colVars <- "../data/kidney/kidney-map/results/SCENIC/int/colVars.rds"
+saveRDS(ScenicOptions, 
+        "../data/kidney/kidney-map/results/SCENIC/int/ScenicOptions.rds")
+```
+
+```{r}
+genesKetp <- geneFiltering(exprMat = expr_mat, 
+                           scenicOptions = ScenicOptions, 
+                           minCountsPerGene = 3 * 0.01 * ncol(expr_mat), 
+                           minSamples = 0.01 * ncol(expr_mat))
+
+expr_mat <- expr_mat[genesKetp, ]
+
+runCorrelation(exprMat_filtered = expr_mat, 
+               scenicOptions = ScenicOptions)
+saveRDS(ScenicOptions, "../data/kidney/kidney-map/results/SCENIC/int/ScenicOptions.rds")
+```
+
+```{r}
+expr_mat <- log1p(expr_mat)
+runGenie3(exprMat = expr_mat, scenicOptions = ScenicOptions)
+saveRDS(ScenicOptions, "../data/kidney/kidney-map/results/SCENIC/int/ScenicOptions.rds")
+```
+
+```{r}
+ScenicOptions <- runSCENIC_1_coexNetwork2modules(scenicOptions = ScenicOptions)
+ScenicOptions <- runSCENIC_2_createRegulons(scenicOptions = ScenicOptions, coexMethods = c("top5perTarget"))
+ScenicOptions <- runSCENIC_3_scoreCells(scenicOptions = ScenicOptions, exprMat = expr_mat)
+saveRDS(ScenicOptions, "../data/kidney/kidney-map/results/SCENIC/int/ScenicOptions.rds")
+```
+
+```{r}
+aucellApp <- plotTsne_AUCellApp(ScenicOptions, expr_mat)
+savedSelections <- shiny::runApp(aucellApp)
+
+# Save the modified thresholds:
+newThresholds <- savedSelections$thresholds
+ScenicOptions@fileNames$int["aucell_thresholds",1] <- "int/newThresholds.Rds"
+saveRDS(newThresholds, file=getIntName(ScenicOptions, "aucell_thresholds"))
+saveRDS(ScenicOptions, file="../data/kidney/kidney-map/results/SCENIC/int/ScenicOptions.rds") 
+
+ScenicOptions <- runSCENIC_4_aucell_binarize(ScenicOptions)
+```
+
+### visualization
+
+```{r}
+npcs <- c(5, 15, 30, 100)
+pr <- c(5, 15, 30)
+ScenicOptions@settings$seed <- 123
+fileNames <- tsneAUC(ScenicOptions, aucType="AUC", npcs=npcs, perpl=pr, onlyHighConf=TRUE, filePrefix="int/tSNE_oHC")
+
+tsne_oHC_AUC <- readRDS("int/tSNE_oHC_AUC_50pcs_05perpl.Rds")
+cellInfo <- readRDS("../data/kidney/kidney-map/results/SCENIC/int/cellInfo.rds")
+tsne_coords <- tsne_oHC_AUC$Y %>% as.data.frame() %>% tibble::rownames_to_column("cell_ids")
+tsne_50pc_30pr <- dplyr::left_join(tsne_coords, cellInfo)
+tsne_50pc_30pr %>% 
+    ggplot(aes(tsne1, tsne2)) +
+    geom_point(aes(color = location))
+
+
+regulon_activity <- readRDS("int/3.4_regulonAUC.Rds")
+regulon_activity_cntinuous <- regulon_activity@assays@data$AUC
+
+cellInfo <- readRDS("../data/kidney/kidney-map/results/SCENIC/cortext_outer_inner/int/cellInfo.rds") %>%
+    dplyr::arrange(location) %>% 
+    dplyr::rename("region" = "location")
+regulon_activity_cntinuous <- regulon_activity_cntinuous[, cellInfo$cell_ids]
+
+ggheatmap::ggheatmap(log1p(regulon_activity_cntinuous), 
+                     annotation_cols = cellInfo[, 3, drop = F], 
+                     cluster_cols = F, 
+                     text_show_cols = F, 
+                     annotation_color = list(region = c("Cortex" = "green", "outer medulla" = "blue", "inner medulla" = "red")), 
+                     color = colorRampPalette(colors = c("black", "goldenrod", "yellow"))(1000), 
+                     legendName = "regulon activity")
+
+ggsave("../data/kidney/kidney-map/results/SCENIC/cortex_outer_inner_regulon_activity.tiff")
+```
+
+
+```{r}
+binary_regulon_activity <- readRDS("../data/kidney/kidney-map/results/SCENIC/cortext_outer_inner/int/4.2_binaryRegulonActivity_nonDupl.Rds")
+cellInfo <- readRDS("../data/kidney/kidney-map/results/SCENIC/cortext_outer_inner/int/cellInfo.rds") %>%
+    dplyr::arrange(location) %>% 
+    dplyr::rename("region" = "location")
+
+cellInfo <- cellInfo %>% dplyr::filter(cell_ids %in% colnames(binary_regulon_activity))
+
+tiff("../data/kidney/kidney-map/results/SCENIC/cortext_outer_inner/cortex_outer_inner_regulon_activity.tiff", 
+     width = 1000, height = 1000)
+pheatmap(binary_regulon_activity, 
+         cluster_rows = T, 
+         cluster_cols = F, 
+         annotation_col = cellInfo[, 3, drop = F], 
+         annotation_colors = list(region = c("Cortex" = "red", "outer medulla" = "green", "inner medulla" = "blue")), 
+         show_colnames = F, 
+         color = colorRampPalette(c("white", "black"))(100), 
+         legend_breaks = c(0, 1), 
+         legend_labels = c("Off", "On"), 
+         clustering_method = "ward.D2", 
+         fontsize = 15, 
+         fontsize_row = 12, 
+         treeheight_row = 70)
+dev.off()
+```
+
+
+## endothelial Aqp1
+```{r}
+library(SingleCellExperiment)
+library(ggplot2)
+library(patchwork)
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+
+plotTSNE(sces,
+         # colour_by = "cell_type",
+         colour_by = idconv("Pecam1", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = 2,
+         point_size = 0.2) +
+    theme(legend.position = "right") +
+    scale_color_continuous(name = "Pecam1(CD31)", type = "viridis") +
+
+plotTSNE(sces,
+         # colour_by = "cell_type",
+         colour_by = idconv("Cdh5", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = 2,
+         point_size = 0.2) +
+    theme(legend.position = "right") +
+    scale_color_continuous(name = "Cdh5", type = "viridis") +
+
+plotTSNE(sces,
+         colour_by = "location",
+         # colour_by = idconv("Aqp1", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = 2,
+         point_size = 0.2) +
+    theme(legend.position = "right") +
+    scale_color_discrete(name = "region") +
+    guides(color = guide_legend(override.aes = list(size = 3))) +
+
+plotTSNE(sces,
+         # colour_by = "cell_type",
+         colour_by = idconv("Aqp1", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "cell_type", 
+         text_size = 2,
+         point_size = 0.2) +
+    theme(legend.position = "right") +
+    scale_color_continuous(name = "Aqp1", type = "viridis") +
+    plot_layout(nrow = 2, byrow = T)
+
+ggsave("../data/kidney/kidney-map/results/endothelium/endothelial_Aqp1.tiff", 
+       width = 14, height = 14)
+```
+
+
+
+# macrophages across cortex, outer medulla, inner medulla
+
+```{r}
+library(cluster)
+library(dplyr)
+library(SingleCellExperiment)
+library(scuttle)
+library(edgeR)
+library(limma)
+library(AnnotationHub)
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+macrophages <- sces[, sces$level3_cluster == "Macrophages"]
+cortex_mac <- macrophages[, macrophages$location == "Cortex"]
+out_mac <- macrophages[, macrophages$location == "outer medulla"]
+inner_mac <- macrophages[, macrophages$location == "inner medulla"]
+
+set.seed(107)
+cortex_mac_cluster <- clara(reducedDim(cortex_mac, "corrected"), 
+                            k = 3, 
+                            metric = "euclidean", 
+                            stand = F, 
+                            samples = 50, 
+                            sampsize = 200, 
+                            cluster.only = TRUE)
+cortex_mac_cluster %>% table
+cortex_mac$agg_cluster <- cortex_mac_cluster[colnames(cortex_mac)]
+
+
+set.seed(108)
+out_mac_cluster <- clara(reducedDim(out_mac, "corrected"), 
+                         k = 3, 
+                         metric = "euclidean", 
+                         stand = F, 
+                         samples = 50, 
+                         sampsize = 200, 
+                         cluster.only = T)
+out_mac_cluster %>% table
+out_mac$agg_cluster <- out_mac_cluster[colnames(out_mac)]
+
+
+set.seed(109)
+inner_mac_cluster <- clara(reducedDim(inner_mac, "corrected"), 
+                           k = 3, 
+                           metric = "euclidean", 
+                           stand = F, 
+                           samples = 50, 
+                           sampsize = 200,
+                           cluster.only = T)
+inner_mac_cluster %>% table
+inner_mac$agg_cluster <- inner_mac_cluster[colnames(inner_mac)]
+```
+
+```{r}
+cortex_mac_agg <- aggregateAcrossCells(cortex_mac, 
+                                       ids = cortex_mac$agg_cluster, 
+                                       statistics = "sum", 
+                                       use.assay.type = "counts")
+out_mac_agg <- aggregateAcrossCells(out_mac, 
+                                    ids = out_mac$agg_cluster, 
+                                    statistics = "sum", 
+                                    use.assay.type = "counts")
+
+inner_mac_agg <- aggregateAcrossCells(inner_mac, 
+                                      ids = inner_mac$agg_cluster, 
+                                      statistics = "sum", 
+                                      use.assay.type = "counts")
+
+counts <- Reduce(cbind, list(counts(cortex_mac_agg), counts(out_mac_agg), counts(inner_mac_agg)))
+colnames(counts) <- paste(rep(c("cortex","outer_medulla", "inner_medulla"), each = 3), 1:3, sep = "_")
+
+group <- factor(rep(c("cortex", "outer medulla", "inner medulla"), each = 3), 
+                levels = c("cortex", "outer medulla", "inner medulla"))
+
+ah <- AnnotationHub()
+query(ah, c("EnsDb", "Mus musculus"))
+ensdb <- ah[["AH109655"]]
+gene_df <- data.frame(ensembl = rownames(counts), 
+                      symbol = mapIds(ensdb, keys = rownames(counts), keytype = "GENEID", column = "SYMBOL"))
+
+y <- DGEList(counts = counts, 
+             group = group, 
+             samples = data.frame(sample = rep(c("cortex", "outer medulla", "inner medulla"), each = 3)), 
+             genes = gene_df)
+
+keep <- filterByExpr(y, min.count = 5)
+keep %>% table
+y <- y[keep, , keep.lib.size = F]
+y <- calcNormFactors(y)
+y$samples
+
+design <- model.matrix(~ 0 + y$samples$group)
+colnames(design) <- c("cortex", "outer_medulla", "inner_medulla")
+comtrast_matrix <- makeContrasts(cortex_vs_inner = cortex - inner_medulla, 
+                                 outer_vs_inner = outer_medulla - inner_medulla, 
+                                 levels = colnames(design))
+
+v <- voom(y, design = design, plot = TRUE)
+vfit <- lmFit(v, design = design)
+vfit <- contrasts.fit(vfit, contrasts = comtrast_matrix)
+efit <- eBayes(vfit)
+efit %>% decideTests() %>% summary()
+cortex_to_inner_mac <- topTable(efit, number = Inf, coef = "cortex_vs_inner")
+write.csv(cortex_to_inner_mac, 
+          "../data/kidney/kidney-map/results/cortex_to_inner_mac_DEGs.csv", 
+          row.names = F, quote = F)
+
+outer_to_inner_mac <- topTable(efit, number = Inf, coef = "outer_vs_inner")
+write.csv(outer_to_inner_mac, 
+          "../data/kidney/kidney-map/results/outer_to_inner_mac_GEDs.csv", 
+          row.names = F, quote = F)
+```
+
+```{r}
+library(biomaRt)
+library(fgsea)
+stats_cortex_inner <- setNames(cortex_to_inner_mac$logFC, cortex_to_inner_mac$ensembl)
+stats_outer_to_inner <- setNames(outer_to_inner_mac$logFC, outer_to_inner_mac$ensembl)
+
+mmart <- useEnsembl("ensembl", dataset = "mmusculus_gene_ensembl")
+searchAttributes(mmart, "GO")
+gene_df <- getBM(attributes = c("go_id", "ensembl_gene_id", "name_1006", "namespace_1003", "go_linkage_type"), 
+                 filters = "ensembl_gene_id", 
+                 values = cortex_to_inner_mac$ensembl, 
+                 mart = mmart)
+gs <- split(gene_df$ensembl_gene_id, gene_df$name_1006)
+
+msigdbr::msigdbr_collections()
+gs <- msigdbr::msigdbr(species = "Mus musculus", category = "H")
+gs <- split(gs$ensembl_gene, gs$gs_name)
+cortex_to_inner_gsea <- fgsea(pathways = gs, 
+                              stats = stats_cortex_inner,
+                              minSize = 10, 
+                              maxSize = 1000, 
+                              eps = 0)
+cortex_to_inner_gsea <- cortex_to_inner_gsea %>% as.data.frame() %>% dplyr::arrange(-NES, pval)
+saveRDS(cortex_to_inner_gsea, 
+          "../data/kidney/kidney-map/results/cortex_to_inner_mac_fgsea.rds")
+
+outer_to_inner_gsea <- fgsea(pathways = gs, 
+                             stats = stats_outer_to_inner, 
+                             minSize = 10, 
+                             maxSize = 1000, 
+                             eps = 0)
+outer_to_inner_gsea <- outer_to_inner_gsea %>% as.data.frame() %>% dplyr::arrange(-NES, pval)
+saveRDS(outer_to_inner_gsea, 
+        "../data/kidney/kidney-map/results/outer_to_inner_mac_fgsea.rds")
+```
+
+# pubmed
+
+```{r}
+library(ggplot2)
+library(magrittr)
+
+pubmed <- read.csv("data/PubMed_Timeline_Results_by_Year.csv")
+
+pubmed %>% 
+    dplyr::filter(Year > 2008) %>% 
+    ggplot(aes(Year, Count)) +
+    geom_bar(stat = "identity") +
+    geom_text(aes(y = Count + 100, label = Count)) +
+    theme_classic() +
+    scale_y_continuous(name = "# papers per year") +
+    scale_x_continuous(breaks = seq(2003, 2023, 2), labels = seq(2003, 2023, 2)) +
+    theme(axis.title = element_text(size = 15), 
+          panel.grid.major.y = element_line(linetype = 2, linewidth = 0.2, color = "grey70")) 
+
+ggsave("../data/kidney/kidney-map/results/pubmed.tiff",
+       width = 10, height = 6)
+```
+
+# ion channel and solute carriers
+
+```{r}
+library(biomaRt)
+library(dplyr)
+library(org.Mm.eg.db)
+library(stringr)
+library(stringr.plus)
+entrez <- keys(org.Mm.eg.db)
+mmart <- useMart(biomart = "ensembl", dataset = "mmusculus_gene_ensembl")
+# searchAttributes(mmart, c("description"))
+gene_df <- getBM(attributes = c("entrezgene_id", "mgi_symbol", "mgi_description", "description"),
+                 filters = "entrezgene_id", 
+                 values = entrez,
+                 mart = mmart)
+
+# gene_df %>% dplyr::filter(grepl("aquaporin", mgi_description))
+# gene_df %>% dplyr::filter(mgi_symbol == "Slc34a3")
+
+# Sodium
+sodium <- gene_df %>% 
+    dplyr::filter(grepl("sodium", mgi_description), grepl("(solute carrier|sodium channel)", description), !(mgi_symbol %in% c("Sclt1", "Scnm1"))) %>% 
+    dplyr::pull(mgi_symbol) %>% sort %>% unique
+
+# Potassium
+potassium <- gene_df %>% dplyr::filter(grepl("potassium", mgi_description), grepl("potassium", description)) %>% dplyr::pull(mgi_symbol) %>% sort %>% unique
+
+# magnesium
+magnesium <- gene_df %>% dplyr::filter(grepl("magnesium", mgi_description), grepl("transport", mgi_description)) %>% dplyr::pull(mgi_symbol) %>% sort %>% unique()
+
+# calcium
+gene_df_filtered <- gene_df %>% dplyr::filter(grepl("calcium", mgi_description))
+ids <- grepl("(calcium channel|calcium-sensing receptor|neuronal calcium sensor|solute carrier family|mitochondrial calcium uniporter|mitochondrial calcium uptake|calcium homeostasis modulator|calcium release activated channel regulator|calcium-activated channel|mitochondrial calcium regulator)", gene_df_filtered$mgi_description)
+ids %>% table
+calcium <- gene_df_filtered[ids, ] %>% dplyr::pull(mgi_symbol) %>% sort %>% unique
+
+# phosphate
+ids <- grepl("(\\b|-|_)phosphate(\\b|-|_)", gene_df$mgi_description, ignore.case = T)
+gene_df[ids, ]
+
+gene_df %>% dplyr::filter(grepl("(\\b|-|_)phosphate(\\b|-|_)", gene_df$mgi_description, ignore.case = T))
+phosphate <- gene_df[ids, ] %>%
+    dplyr::filter(grepl("(\\breceptor|\\btransporter|\\bcarrier|\\bcotransporter|\\btransfer\\b|solute carrier family\\b)",  mgi_description, ignore.case = F)) %>% 
+    dplyr::pull(mgi_symbol) %>% sort %>% unique()
+
+# Chloride
+chloride <- gene_df %>% dplyr::filter(grepl("chloride", mgi_description)) %>% dplyr::pull(mgi_symbol) %>% sort %>% unique()
+
+# water channal, aquaporin
+aquaporin <- gene_df %>% dplyr::filter(grepl("aquaporin", mgi_description), grepl("aquaporin", description)) %>% dplyr::pull(mgi_symbol) %>% sort
+
+# Glucose
+ids <- grepl("glucose", gene_df$mgi_description) 
+glucose <- gene_df[ids, ] %>% dplyr::filter(grepl("solute carrier family", mgi_description)) %>% dplyr::pull(mgi_symbol) %>% sort %>% unique()
+
+# Amino acids
+ids <- grepl("\\bamino\\b", gene_df$mgi_description) 
+amino_acids <- gene_df[ids, ] %>% dplyr::filter(grepl("solute carrier family", mgi_description)) %>% dplyr::pull(mgi_symbol) %>% sort %>% unique()
+
+
+transport_list <- list(
+    sodium = data.frame(symbol = sodium), 
+    potassium = data.frame(symbol = potassium), 
+    magnesium = data.frame(symbol = magnesium), 
+    calcium = data.frame(symbol = calcium), 
+    phosphate = data.frame(symbol = phosphate), 
+    chloride = data.frame(symbol = chloride), 
+    aquaporin = data.frame(symbol = aquaporin), 
+    glucose = data.frame(symbol = glucose), 
+    amino_acids = data.frame(symbol = amino_acids)
+)
+library(AnnotationHub)
+ah <- AnnotationHub()
+query(ah, c("EnsDb", "Mus musculus"))
+ensdb <- ah[["AH109655"]]
+
+
+transport_list <- lapply(transport_list, function(x){
+    x = data.frame(symbol = x$symbol, 
+                   ensembl = mapIds(ensdb, keys = x$symbol, keytype = "SYMBOL", column = "GENEID"))
+})
+saveRDS(transport_list, "../data/kidney/kidney-map/results/transport_channel/transport_list.rds")
+transport_list <- readRDS("../data/kidney/kidney-map/results/transport_channel/transport_list.rds")
+```
+
+```{r}
+library(scuttle)
+library(pheatmap)
+
+sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
+tubule_sces <- sces[, grepl("(^PTS|^LOH|^DCT|^CNT|_IC|_PC)", sces$cell_type)]
+
+tubule_agg <- aggregateAcrossCells(tubule_sces, 
+                                   ids = tubule_sces$cell_type, 
+                                   statistics = "mean", 
+                                   use.assay.type = "logcounts")
+logcounts_list <- lapply(transport_list, function(x){
+    tubule_agg[x[[2]], ] %>% logcounts
+})
+
+logcounts_list <- lapply(logcounts_list, function(x){
+    ids = (rowSums(x) > 0)
+    x = x[ids, ]
+    rownames(x) = mapIds(ensdb, keys = rownames(x), keytype = "GENEID", column = "SYMBOL")
+    return(x)
+})
+
+# reorder columns
+ro <- c("PTS1", "PTS2", "PTS3", "LOH_DTL1", "LOH_DTL2", "LOH_DTL3",
+        "LOH_ATL", "LOH_MTAL", "LOH_CTAL", "DCT", "CNT", "CCD_IC", 
+        "OMCD_IC", "IMCD_IC", "CCD_PC", "OMCD_PC", "IMCD_PC")
+logcounts_list <- lapply(logcounts_list, function(x){
+    x = x[, ro]
+    x = as.data.frame(x) %>% tibble::rownames_to_column("symbol")
+    return(x)
+})
+```
+
+```{r}
+library(purrr)
+
+lens <- logcounts_list %>% sapply(nrow) %>% cumsum()
+
+mtx <- map_df(logcounts_list, bind_rows)
+rns <- mtx$symbol
+mtx <- mtx[, -1] %>% as.matrix()
+rownames(mtx) <- seq_len(nrow(mtx))
+breaks <- seq(range(mtx)[[1]], range(mtx)[[2]], by = 0.01)
+
+q90 <- quantile(mtx, probs = 0.9)
+
+for(i in seq_len(ncol(mtx))){
+    for(j in seq_len(nrow(mtx))){
+        if(mtx[j, i] <= q90){mtx[j, i] = 0}
+    }
+}
+
+ann_row <- data.frame(Class = rep(c("Sodium", "Potassium", "Magnesium", 
+                                   "Calcium", "Phosphate", "Chloride", 
+                                   "Water Channel ", "Glucose", "Amino acids"), times = sapply(logcounts_list, nrow)), 
+                      row.names = seq_len(nrow(mtx)))
+ann_color <- list(Class = setNames(RColorBrewer::brewer.pal(9, "Set1"), unique(ann_row$Class)))
+
+tiff("../data/kidney/kidney-map/results/transport_channel/transport.tiff", height = 1500 * 1.2, width = 5000)
+pheatmap(t(mtx), 
+         breaks = breaks, 
+         cluster_rows = F, 
+         cluster_cols = F, 
+         gaps_col = lens[-length(lens)], 
+         color = colorRampPalette(c("white", "black"))(length(breaks)),
+         show_rownames = T,
+         fontsize_row = 50, 
+         fontsize_col = 15,
+         labels_col = rns, 
+         annotation_col = ann_row, 
+         annotation_colors = ann_color[1], 
+         fontsize = 50, 
+         legend_breaks = c(0, 5.5), 
+         legend_labels = c("low", "high"))
+dev.off()
+```
+
