@@ -304,12 +304,12 @@ source("functions/idconv.R")
 sces <- readRDS("../data/kidney/kidney-map/integrated_data/fastMNN_integrated.rds")
 plotTSNE(sces,
          # colour_by = "cell_type",
-         colour_by = idconv("Plpp1", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         colour_by = idconv("C1qa", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
          text_by = "cell_type", 
          text_size = 2,
          point_size = 0.2) +
     theme(legend.position = "right") +
-    scale_color_gradient(name = "Plpp1", low = "grey80", high = "red") 
+    scale_color_gradient(name = "Lrp2", low = "grey80", high = "red") 
 
 
 plotTSNE(sces,
@@ -321,6 +321,20 @@ plotTSNE(sces,
     theme(legend.position = "right") +
     # scale_color_gradient(name = "Aqp1", low = "grey80", high = "red") +
     plot_layout(ncol = 2)
+
+
+plotTSNE(sces,
+         colour_by = "level2_cluster",
+         # colour_by = idconv("C1qa", from_type = "SYMBOL", to_type = "GENEID", db = "mouse"),
+         text_by = "level2_cluster", 
+         text_size = 2,
+         point_size = 0.2) +
+    theme(legend.position = "none", 
+          axis.line = element_blank(), 
+          axis.ticks = element_blank(), 
+          axis.text = element_blank(), 
+          axis.title = element_blank())
+ggsave("../data/kidney/kidney-map/integrated_data/cluster_for_subcluster_annotation.tiff")
 ```
 
 ### level 1 markers
@@ -481,13 +495,13 @@ level3_markers <- list(
     "PTS2" = c("Slc22a6"),
     "PTS3" = c("Slc13a3"),
     "LOH_DTL1" = c("Slc14a2"), 
-    "LOH_DTL2" = c("Fcgbp"),
+    "LOH_DTL2" = c("Bst1"),
     "LOH_DTL3" = c("Slc39a8", "Angpt2", "Fmo2"),
     "LOH_ATL" = c("Sptssb"), 
     "LOH_MTAL" = c("Slc12a1", "Nccrp1", "Gpx6"),
     "LOH_CTAL" = c("Egf", "Slc12a1", "Umod", "Pth1r", "Gpx6"),
     "DCT" = c("Pvalb"), 
-    "CNT" = c("Calb1", "S100g", "Pgam2"), 
+    "CNT" = c("Ltc4s", "Calb1", "S100g", "Pgam2"), 
     "CCD_IC" = c("Slc26a4", "Insrr", "Hmx2"),
     "OMCD_IC" = c("Kit"), 
     "IMCD_IC" = c("Aqp6", "Slc4a1", "Kit"),
@@ -2217,7 +2231,8 @@ p_ligand_activity <- ligands_activity %>%
     scale_fill_gradient2(name = "ligand activity", 
                          low = "whitesmoke", 
                          high = "black",
-                         breaks = c(0, 0.01, 0.02, 0.03)) +
+                         breaks = c(0.01, 0.037), 
+                         labels = c("low", "high")) +
     theme(axis.ticks.y = element_blank(), 
           plot.title = element_text(hjust = 0.5, size = 10, face = "bold"), 
           legend.position = "right", 
@@ -2250,7 +2265,8 @@ p_ligand_target_links <- mat %>%
     geom_raster(aes(fill = weight)) +
     scale_x_discrete(name = "Dendritic Cells expressed \nantigene presentation genes", expand = c(0,0)) +
     scale_y_discrete(name = "ligands expressed by \nsensory neuron", expand = c(0,0)) +
-    scale_fill_gradient(name = "ligand-target \nregulation potential", low = "grey90", high = "black") + 
+    scale_fill_gradient(name = "ligand-target \nregulation potential", low = "grey90", high = "black", 
+                        breaks = c(0.003, 0.06), labels = c("low", "high")) + 
     theme(axis.title = element_text(size = 15), 
           axis.ticks = element_blank(), 
           plot.margin = unit(c(0, 0, 0, 5), "mm"))

@@ -531,3 +531,33 @@ ggsave("../data/kidney/kidney-map/results/Supplemental/GABA.tiff", width = 15)
 ```
 
 
+# top 100 marker genes for table
+```{r}
+library(tidyverse)
+library(readxl)
+source("functions/idconv.R")
+
+fmarker1 <- readRDS("../data/kidney/kidney-map/results/markers/level1_markers.rds")
+fmarker2 <- readRDS("../data/kidney/kidney-map/results/markers/level2_markers.rds")
+fmarker3 <- readRDS("../data/kidney/kidney-map/results/markers/level3_markers.rds")
+
+df1 <- sapply(fmarker1, rownames) %>% 
+    head(100) %>% 
+    apply(2, idconv, from_type = "GENEID", to_type = "SYMBOL", db = "mouse") %>% 
+    as.data.frame()
+
+df2 <- sapply(fmarker2, rownames) %>%
+    head(100) %>% 
+    apply(2, idconv, from_type = "GENEID", to_type = "SYMBOL", db = "mouse") %>% 
+    as.data.frame()
+
+df3 <- sapply(fmarker3, rownames) %>% 
+    head(100) %>% 
+    apply(2, idconv, from_type = "GENEID", to_type = "SYMBOL", db = "mouse") %>% 
+    as.data.frame()
+
+write.csv(df1, "../data/kidney/kidney-map/results/Supplemental/df1.csv")
+write.csv(df2, "../data/kidney/kidney-map/results/Supplemental/df2.csv")
+write.csv(df3, "../data/kidney/kidney-map/results/Supplemental/df3.csv")
+```
+
